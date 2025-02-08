@@ -35,25 +35,25 @@
 
 > {
 >
->   "language": "zh", # zh/en,
-> 
->   "tasks_json_path": "/path/tasks.json",
-> 
->   "icon_path": "/path/icon.png",
+> "language": "zh", # zh/en,
 >
->   "url": "xxx/nextcloud/remote.php/dav/calendars/xxx/x/", # without http
+> "tasks_json_path": "/path/tasks.json",
 >
->   "username": "user",
+> "icon_path": "/path/icon.png",
 >
->   "password": "passwd",
+> "url": "xxx/nextcloud/remote.php/dav/calendars/xxx/x/", # without http
 >
->   "check_interval": 60, # in seconds
-> 
->   "show_ddl_message_box": true, # if show ddl warning box
+> "username": "user",
 >
->   "ssl_verify_cert": false, # check cert or not
+> "password": "passwd",
 >
->   "offline_mode": false # on-line or off-line mode
+> "check_interval": 60, # in seconds
+>
+> "show_ddl_message_box": true, # if show ddl warning box
+>
+> "ssl_verify_cert": false, # check cert or not
+>
+> "offline_mode": false # on-line or off-line mode
 >
 > }
 

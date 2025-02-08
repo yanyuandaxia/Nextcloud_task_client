@@ -35,29 +35,25 @@ Fill in the following content in the **conf.json** file, and please remove the c
 
 > {
 >
->   "language": "zh", # zh/en,
-> 
-> {
+> "language": "zh", # zh/en,
 >
->   "language": "zh", # zh/en,
-> 
->   "tasks_json_path": "/path/tasks.json",
-> 
->   "icon_path": "/path/icon.png",
+> "tasks_json_path": "/path/tasks.json",
 >
->   "url": "xxx/nextcloud/remote.php/dav/calendars/xxx/x/", # without http
+> "icon_path": "/path/icon.png",
 >
->   "username": "user",
+> "url": "xxx/nextcloud/remote.php/dav/calendars/xxx/x/", # without http
 >
->   "password": "passwd",
+> "username": "user",
 >
->   "check_interval": 60, # in seconds
-> 
->   "show_ddl_message_box": true, # if show ddl warning box
+> "password": "passwd",
 >
->   "ssl_verify_cert": false, # check cert or not
+> "check_interval": 60, # in seconds
 >
->   "offline_mode": false # on-line or off-line mode
+> "show_ddl_message_box": true, # if show ddl warning box
+>
+> "ssl_verify_cert": false, # check cert or not
+>
+> "offline_mode": false # on-line or off-line mode
 >
 > }
 
