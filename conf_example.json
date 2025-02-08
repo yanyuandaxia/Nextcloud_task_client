@@ -1,0 +1,9 @@
+{
+    "language": "en",
+    "url": "1.1.1.1/nextcloud/remote.php/dav/calendars/qwert/-/",
+    "username": "qwert",
+    "password": "qwert",
+    "check_interval": 600,
+    "ssl_verify_cert": false,
+    "offline_mode": false
+}
