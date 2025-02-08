@@ -27,7 +27,7 @@ Once the environment is created, activate it:
 
 ### 3. Install Dependencies
 
-> pip install pyqt5, caldav
+> pip install pyqt5 caldav
 
 ### 4. Configure the Configuration File
 
