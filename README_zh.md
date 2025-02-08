@@ -27,7 +27,7 @@
 
 ### 3. 安装依赖
 
-> pip install pyqt5, caldav
+> pip install pyqt5 caldav
 
 ### 4. 填写配置文件
 
