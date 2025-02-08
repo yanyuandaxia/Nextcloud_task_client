@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from PyQt5 import QtWidgets, QtCore, QtGui
 from nextcloudtasks import NextcloudTask, Todo
-from local_tasks import load_server_tasks, save_server_tasks
+from local_tasks import load_local_tasks, save_server_tasks
 import sys
 import datetime
 import json
@@ -204,12 +204,17 @@ class EditTaskDialog(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
-
-        def load_conf():
-            with open("conf.json", "r", encoding="utf-8") as f:
+        if len(sys.argv)>1:
+            self.path_conf = sys.argv[1]
+        else:
+            self.path_conf = "conf.json"
+        def load_conf(path_conf):
+            with open(path_conf, "r", encoding="utf-8") as f:
                 config = json.load(f)
             return config
-        self.config = load_conf()
+        self.config = load_conf(self.path_conf)
+        self.path_tasks = self.config["tasks_json_path"]
+        self.path_icon = self.config["icon_path"]
         self.current_language = self.config["language"]  # "zh" 或 "en"
         self.translations = TRANSLATIONS
         self.setWindowTitle(
@@ -218,11 +223,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.initUI()
         self.createMenuBar()  # 增加菜单栏（含语言切换）
         self.createTrayIcon()
-        self.setWindowIcon(QtGui.QIcon("icon.png"))
+        self.setWindowIcon(QtGui.QIcon(self.path_icon))
         self.setupDeadlineChecker()
 
         # 从文件加载本地任务列表（JSON 格式）
-        self.local_tasks = load_server_tasks()
+        self.local_tasks = load_local_tasks(self.path_tasks)
         self.tasks = None
 
         if not self.config["ssl_verify_cert"]:
@@ -363,7 +368,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def createTrayIcon(self):
         self.trayIcon = QtWidgets.QSystemTrayIcon(self)
-        icon = QtGui.QIcon("icon.png")
+        icon = QtGui.QIcon(self.path_icon)
         self.trayIcon.setIcon(icon)
         self.trayIcon.setToolTip(
             self.translations[self.current_language]["tray_tooltip"])
@@ -380,11 +385,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         event.ignore()
         self.hide()
-        self.trayIcon.showMessage(
-            self.translations[self.current_language]["window_title"],
-            self.translations[self.current_language]["app_minimized"],
-            QtWidgets.QSystemTrayIcon.Information, 2000
-        )
+        # self.trayIcon.showMessage(
+        #     self.translations[self.current_language]["window_title"],
+        #     self.translations[self.current_language]["app_minimized"],
+        #     QtWidgets.QSystemTrayIcon.Information, 2000
+        # )
 
     def checkLocalServerTasks(self):
         def normalize_due_datetime(due):
@@ -430,7 +435,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # 将服务器任务转换为字典列表
             server_tasks = [task.to_dict() for task in self.tasks]
             # 加载本地 JSON 数据并归一化 due 字段
-            local_data = load_server_tasks()
+            local_data = load_local_tasks(self.path_tasks)
             # 比较本地与服务器数据（归一化后的）
             if compare_data(local_data, server_tasks):
                 msgBox = QtWidgets.QMessageBox(self)
@@ -451,7 +456,7 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 final_tasks = server_tasks
             # 保存最终数据到本地 JSON 文件
-            save_server_tasks(final_tasks)
+            save_server_tasks(final_tasks, self.path_tasks)
         except Exception as e:
             print(e)
             if str(e) != "offline mode":
@@ -475,8 +480,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tasks.append(task)
             # 保存服务器任务到本地 JSON 文件
             tasks_list = [task.to_dict() for task in self.tasks]
-            save_server_tasks([])
-            save_server_tasks(tasks_list)
+            save_server_tasks([], self.path_tasks)
+            save_server_tasks(tasks_list, self.path_tasks)
         except Exception as e:
             if str(e) != "offline mode":
                 QtWidgets.QMessageBox.critical(
@@ -486,7 +491,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         e)
                 )
             # 网络异常则加载本地数据
-            tasks_list = load_server_tasks()
+            tasks_list = load_local_tasks(self.path_tasks)
             self.tasks = []
             for t in tasks_list:
                 local_task = type("LocalTask", (), {})()
@@ -510,7 +515,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 task = Todo(t.data)
                 self.tasks.append(task)
             tasks_list = [task.to_dict() for task in self.tasks]
-            save_server_tasks(tasks_list)
+            save_server_tasks(tasks_list, self.path_tasks)
         except Exception as e:
             if str(e) != "offline mode":
                 QtWidgets.QMessageBox.critical(
@@ -519,7 +524,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.translations[self.current_language]["fetch_error_message"].format(
                         e)
                 )
-            tasks_list = load_server_tasks()
+            tasks_list = load_local_tasks(self.path_tasks)
             self.tasks = []
             for t in tasks_list:
                 local_task = type("LocalTask", (), {})()
@@ -580,7 +585,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         f"{self.translations[self.current_language]['update_error']}: {summary} 更新失败: {e}"
                     )
 
-        tasks = load_server_tasks()
+        tasks = load_local_tasks(self.path_tasks)
         updated = False
         for task in tasks:
             if (uid and task.get("uid") == uid) or (not uid and task.get("summary") == summary):
@@ -588,7 +593,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 task["percent_complete"] = new_percent
                 updated = True
         if updated:
-            save_server_tasks(tasks)
+            save_server_tasks(tasks, self.path_tasks)
         self.fetchTasks()
 
     def openAddTaskDialog(self):
@@ -596,7 +601,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             data = dialog.getData()
             self.local_tasks.append(data)
-            save_server_tasks(self.local_tasks)
+            save_server_tasks(self.local_tasks, self.path_tasks)
 
             try:
                 if self.config['offline_mode']:
@@ -610,7 +615,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                           due=data["due"],
                                           priority=data["priority"])
                 self.local_tasks.remove(data)
-                save_server_tasks(self.local_tasks)
+                save_server_tasks(self.local_tasks, self.path_tasks)
                 QtWidgets.QMessageBox.information(
                     self,
                     self.translations[self.current_language]["add_task"],
@@ -662,7 +667,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                 self.translations[self.current_language]["update_error"],
                                 f"{self.translations[self.current_language]['update_error']}: 网络错误，将仅更新本地数据.\n错误信息: {e}"
                             )
-                        tasks = load_server_tasks()
+                        tasks = load_local_tasks(self.path_tasks)
                         updated = False
                         for t in tasks:
                             if t.get("uid") == uid:
@@ -670,7 +675,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                 updated = True
                                 break
                         if updated:
-                            save_server_tasks(tasks)
+                            save_server_tasks(tasks, self.path_tasks)
                     self.fetchTasks()
             except Exception as e:
                 QtWidgets.QMessageBox.critical(
@@ -691,7 +696,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 if dialog.exec_() == QtWidgets.QDialog.Accepted:
                     data = dialog.getData()
                     self.local_tasks[index] = data
-                    save_server_tasks(self.local_tasks)
+                    save_server_tasks(self.local_tasks, self.path_tasks)
                     QtWidgets.QMessageBox.information(
                         self,
                         self.translations[self.current_language]["edit_task"],
@@ -730,11 +735,11 @@ class MainWindow(QtWidgets.QMainWindow):
                         self.translations[self.current_language]["delete_error"],
                         f"{self.translations[self.current_language]['delete_error']}:{e}\n{self.translations[self.current_language]['delete_error_sub']}"
                     )
-        tasks = load_server_tasks()
+        tasks = load_local_tasks(self.path_tasks)
         new_tasks = [task for task in tasks if task.get(
             "uid") != uid and task.get("summary") != summary]
-        save_server_tasks(new_tasks)
-        self.tasks = load_server_tasks()
+        save_server_tasks(new_tasks, self.path_tasks)
+        self.tasks = load_local_tasks(self.path_tasks)
 
         QtWidgets.QMessageBox.information(
             self,
@@ -758,7 +763,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return
 
-        local_tasks = load_server_tasks()
+        local_tasks = load_local_tasks(self.path_tasks)
         for task in local_tasks:
             try:
                 if not task.get("uid"):
@@ -794,7 +799,7 @@ class MainWindow(QtWidgets.QMainWindow):
             for t in todos:
                 task_obj = Todo(t.data)
                 server_tasks.append(task_obj.to_dict())
-            save_server_tasks(server_tasks)
+            save_server_tasks(server_tasks, self.path_tasks)
         except Exception as ex:
             print(
                 f"{self.translations[self.current_language]['sync_error']}: {ex}")
@@ -821,6 +826,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 msg = msg_template.format(summary=task.summary)
                 self.trayIcon.showMessage(
                     title, msg, QtWidgets.QSystemTrayIcon.Warning, 5000)
+                if self.config['show_ddl_message_box']:
+                    QtWidgets.QMessageBox.warning(
+                            self,
+                            title,
+                            f"{msg}"
+                        )
 
 
 def main():

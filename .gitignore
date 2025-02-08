@@ -172,4 +172,4 @@ cython_debug/
 
 # my conf
 conf.json
-server_tasks.json
+tasks.json

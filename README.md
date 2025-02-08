@@ -27,7 +27,7 @@ Once the environment is created, activate it:
 
 ### 3. Install Dependencies
 
-> pip install pyqt5, caldav
+> pip install pyqt5 caldav
 
 ### 4. Configure the Configuration File
 
@@ -35,7 +35,15 @@ Fill in the following content in the **conf.json** file, and please remove the c
 
 > {
 >
->   "language": "zh", # zh/en
+>   "language": "zh", # zh/en,
+> 
+> {
+>
+>   "language": "zh", # zh/en,
+> 
+>   "tasks_json_path": "/path/tasks.json",
+> 
+>   "icon_path": "/path/icon.png",
 >
 >   "url": "xxx/nextcloud/remote.php/dav/calendars/xxx/x/", # without http
 >
@@ -43,7 +51,9 @@ Fill in the following content in the **conf.json** file, and please remove the c
 >
 >   "password": "passwd",
 >
->   "check_interval": 60, # in seconds
+>   "check_interval": 60, # in seconds
+> 
+>   "show_ddl_message_box": true, # if show ddl warning box
 >
 >   "ssl_verify_cert": false, # check cert or not
 >

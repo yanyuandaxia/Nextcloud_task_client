@@ -27,29 +27,35 @@
 
 ### 3. 安装依赖
 
-> pip install pyqt5, caldav
+> pip install pyqt5 caldav
 
 ### 4. 填写配置文件
 
 在conf.json中填写以下内容，请删除#后的注释
 
 > {
-
-    "language": "zh", # zh/en
-
-    "url": "xxx/nextcloud/remote.php/dav/calendars/xxx/x/", # without http
-
-    "username": "user",
-
-    "password": "passwd",
-
-    "check_interval": 60, # in seconds
-
-    "ssl_verify_cert": false, # check cert or not
-
-    "offline_mode": false # on-line or off-line mode
-
-}
+>
+>   "language": "zh", # zh/en,
+> 
+>   "tasks_json_path": "/path/tasks.json",
+> 
+>   "icon_path": "/path/icon.png",
+>
+>   "url": "xxx/nextcloud/remote.php/dav/calendars/xxx/x/", # without http
+>
+>   "username": "user",
+>
+>   "password": "passwd",
+>
+>   "check_interval": 60, # in seconds
+> 
+>   "show_ddl_message_box": true, # if show ddl warning box
+>
+>   "ssl_verify_cert": false, # check cert or not
+>
+>   "offline_mode": false # on-line or off-line mode
+>
+> }
 
 ### 5. 运行程序
 

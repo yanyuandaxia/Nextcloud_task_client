@@ -1,9 +1,12 @@
 {
     "language": "en",
+    "tasks_json_path": "/path/tasks.json",
+    "icon_path": "/path/icon.png",
     "url": "1.1.1.1/nextcloud/remote.php/dav/calendars/qwert/-/",
     "username": "qwert",
     "password": "qwert",
     "check_interval": 600,
+    "show_ddl_message_box": true,
     "ssl_verify_cert": false,
     "offline_mode": false
 }
