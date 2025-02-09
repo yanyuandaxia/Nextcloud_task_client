@@ -61,4 +61,4 @@
 
 在激活的 conda 环境中运行主程序（例如 `main.py`）：
 
-python main.py
+python main.py conf.json
