@@ -61,6 +61,6 @@ Fill in the following content in the **conf.json** file, and please remove the c
 
 Within the activated conda environment, run the main program (for example, `main.py`):
 
-> python main.py
+> python main.py conf.json
 
 ---
