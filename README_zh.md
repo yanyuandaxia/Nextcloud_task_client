@@ -31,7 +31,7 @@
 
 ### 4. 填写配置文件
 
-在conf.json中填写以下内容，请删除#后的注释
+在conf.json中填写以下内容，请删除#后的注释，或者在程序的设置菜单中填写以下内容
 
 > {
 >
@@ -61,4 +61,10 @@
 
 在激活的 conda 环境中运行主程序（例如 `main.py`）：
 
-python main.py conf.json
+> python main.py
+
+或者
+
+> python main.py conf.json
+
+或者直接运行exe文件。

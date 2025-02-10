@@ -31,7 +31,7 @@ Once the environment is created, activate it:
 
 ### 4. Configure the Configuration File
 
-Fill in the following content in the **conf.json** file, and please remove the comments (the text following `#`):
+Fill in the following content in the **conf.json** file, and please remove the comments (the text following `#`), or just fill these in config menu:
 
 > {
 >
@@ -41,7 +41,7 @@ Fill in the following content in the **conf.json** file, and please remove the c
 >
 > "icon_path": "/path/icon.png",
 >
-> "url": "xxx/nextcloud/remote.php/dav/calendars/xxx/x/", # without http
+> "url": "xxx/nextcloud/remote.php/dav/calendars/xxx/x/",
 >
 > "username": "user",
 >
@@ -61,6 +61,12 @@ Fill in the following content in the **conf.json** file, and please remove the c
 
 Within the activated conda environment, run the main program (for example, `main.py`):
 
+> python main.py
+
+or
+
 > python main.py conf.json
+
+or just run the exe file.
 
 ---
