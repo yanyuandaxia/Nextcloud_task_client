@@ -9,6 +9,7 @@ from nextcloudtasks import NextcloudTask, Todo
 from local_tasks import load_local_tasks, save_local_tasks
 from translations import TRANSLATIONS
 
+
 # ---------------------------
 # 任务操作处理类
 # ---------------------------
@@ -452,7 +453,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.translations.get("settings", "设置"))
         self.settingsAction.triggered.connect(self.openSettingsDialog)
 
-        # 直接添加“关于”菜单项（不再使用下拉菜单）
+        # 直接添加“关于”菜单项
         self.aboutAction = menubar.addAction(self.translations["about_menu"])
         self.aboutAction.triggered.connect(self.showAbout)
 
@@ -548,8 +549,32 @@ class MainWindow(QtWidgets.QMainWindow):
             item_name = QtWidgets.QTableWidgetItem(task.summary)
             item_name.setData(QtCore.Qt.UserRole, task.uid)
             self.tableWidget.setItem(rowPosition, 1, item_name)
+
+            # 修改优先级显示部分：
+            try:
+                p_val = int(task.priority)
+            except Exception:
+                p_val = None
+            if p_val is None:
+                display_priority = str(task.priority)
+            else:
+                if p_val == 0:
+                    display_priority = self.translations.get(
+                        "priority_extremely_high", "极高")
+                elif 1 <= p_val <= 3:
+                    display_priority = self.translations.get(
+                        "priority_high", "高")
+                elif 4 <= p_val <= 6:
+                    display_priority = self.translations.get(
+                        "priority_medium", "中")
+                elif 7 <= p_val <= 9:
+                    display_priority = self.translations.get(
+                        "priority_low", "低")
+                else:
+                    display_priority = str(p_val)
             self.tableWidget.setItem(
-                rowPosition, 2, QtWidgets.QTableWidgetItem(str(task.priority)))
+                rowPosition, 2, QtWidgets.QTableWidgetItem(display_priority))
+
             if task.due and isinstance(task.due, datetime.datetime):
                 deadline_str = task.due.strftime('%Y-%m-%d %H:%M')
             else:
@@ -815,6 +840,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def checkServerTasks(self):
         self.fetchTasks()
+
+    def showAbout(self):
+        aboutDlg = AboutDialog(self.translations, self)
+        aboutDlg.exec_()
 
 
 def main():

@@ -66,7 +66,12 @@ TRANSLATIONS = {
         "config_saved": "配置保存成功，请重启应用使配置生效。",
         "config_updated": "配置已更新。",
         "reload_config_failed": "重新加载配置失败: {}",
-        "cannot_load_config": "无法加载配置文件，请检查配置。"
+        "cannot_load_config": "无法加载配置文件，请检查配置。",
+        # 优先级相关
+        "priority_extremely_high": "极高",
+        "priority_high": "高",
+        "priority_medium": "中",
+        "priority_low": "低",
     },
     "en": {
         "window_title": "Nextcloud Task Sync Client",
@@ -135,6 +140,11 @@ TRANSLATIONS = {
         "config_saved": "Configuration saved successfully. Please restart the application to apply changes.",
         "config_updated": "Configuration updated.",
         "reload_config_failed": "Failed to reload configuration: {}",
-        "cannot_load_config": "Unable to load configuration file, please check the configuration."
+        "cannot_load_config": "Unable to load configuration file, please check the configuration.",
+        # Priority related
+        "priority_extremely_high": "Extremely High",
+        "priority_high": "High",
+        "priority_medium": "Medium",
+        "priority_low": "Low"
     }
 }
