@@ -140,7 +140,10 @@ class NextcloudTask:
         self.sort = ("priority",)
 
     def connect(self, username, password):
-        url = self.url.split("://")[1]
+        try:
+            url = self.url.split("://")[1]
+        except IndexError:
+            url = self.url
         self.client = caldav.DAVClient(
             "https://"+username+":"+password+"@"+url, ssl_verify_cert=self.config["ssl_verify_cert"])
         try:
