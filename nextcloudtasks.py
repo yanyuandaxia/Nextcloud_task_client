@@ -140,8 +140,9 @@ class NextcloudTask:
         self.sort = ("priority",)
 
     def connect(self, username, password):
+        url = self.url.split("://")[1]
         self.client = caldav.DAVClient(
-            "https://"+username+":"+password+"@"+self.url, ssl_verify_cert=self.config["ssl_verify_cert"])
+            "https://"+username+":"+password+"@"+url, ssl_verify_cert=self.config["ssl_verify_cert"])
         try:
             self.calendar = self.client.principal().calendar(self.list)
         except caldav.error.NotFoundError:
