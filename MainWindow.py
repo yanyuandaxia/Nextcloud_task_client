@@ -1,25 +1,41 @@
-# ---------------------------
-# 主窗口
-# ---------------------------
-
-
-from AboutDialog import AboutDialog
-from AddTaskDialog import AddTaskDialog
-from EditTaskDialog import EditTaskDialog
-from SettingsDialog import SettingsDialog
-from TaskHandler import TaskHandler
-from local_tasks import load_local_tasks, save_local_tasks
-from nextcloudtasks import NextcloudTask, Todo
 from translations import TRANSLATIONS
-
-
-import urllib3
-from PyQt5 import QtCore, QtGui, QtWidgets
-
-
+from nextcloudtasks import NextcloudTask, Todo
+from local_tasks import load_local_tasks, save_local_tasks
+from TaskHandler import TaskHandler
+from SettingsDialog import SettingsDialog
+from EditTaskDialog import EditTaskDialog
+from AddTaskDialog import AddTaskDialog
+from AboutDialog import AboutDialog
 import datetime
 import json
 import sys
+import urllib3
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+# 自定义排序的 QTableWidgetItem
+
+
+class SortedItem(QtWidgets.QTableWidgetItem):
+    def __init__(self, text, sort_key=None):
+        super().__init__(text)
+        # 如果未指定，则用文本作为排序关键字
+        self.sort_key = sort_key if sort_key is not None else text
+
+    def __lt__(self, other):
+        if isinstance(other, SortedItem):
+            # 若内部数据为数字，则进行数字比较
+            if isinstance(self.sort_key, (int, float)) and isinstance(other.sort_key, (int, float)):
+                return self.sort_key < other.sort_key
+            # 若为日期则直接比较
+            if isinstance(self.sort_key, datetime.datetime) and isinstance(other.sort_key, datetime.datetime):
+                return self.sort_key < other.sort_key
+        # 否则按照字符串比较
+        return str(self.sort_key) < str(other.sort_key)
+
+
+# ---------------------------
+# 主窗口
+# ---------------------------
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -96,9 +112,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.translations["deadline"].replace(":", ""),
             self.translations["task_detail"].replace(":", "")
         ])
+        # 取消编辑，注意勾选框将在 itemChanged 中响应变化
         self.tableWidget.setEditTriggers(
             QtWidgets.QAbstractItemView.NoEditTriggers)
         layout.addWidget(self.tableWidget)
+
+        # 记录各列的当前排序顺序（用于点击时切换排序顺序）
+        self.last_sort_order = {}
+
+        # 连接表头点击信号（只对第0、1、2、3列响应排序）
+        header = self.tableWidget.horizontalHeader()
+        header.sectionClicked.connect(self.onHeaderClicked)
+
+        # 监听 item 状态变化（用于完成列的勾选）
+        self.tableWidget.itemChanged.connect(self.onItemChanged)
 
         btnLayout = QtWidgets.QHBoxLayout()
         self.fetchButton = QtWidgets.QPushButton(
@@ -122,6 +149,107 @@ class MainWindow(QtWidgets.QMainWindow):
         self.deleteButton.clicked.connect(self.deleteTask)
         self.syncButton.clicked.connect(self.syncServerTasks)
 
+    def onHeaderClicked(self, logicalIndex):
+        # 仅对第0（完成）、1（任务名）、2（优先级）、3（截止日期）列启用排序
+        allowed = [0, 1, 2, 3]
+        if logicalIndex not in allowed:
+            return
+        # 切换排序顺序：第一次点击为升序，再次点击为降序
+        current_order = self.last_sort_order.get(
+            logicalIndex, QtCore.Qt.AscendingOrder)
+        new_order = QtCore.Qt.DescendingOrder if current_order == QtCore.Qt.AscendingOrder else QtCore.Qt.AscendingOrder
+        self.last_sort_order[logicalIndex] = new_order
+        self.tableWidget.sortItems(logicalIndex, new_order)
+
+    def onItemChanged(self, item):
+        # 仅对第0列（完成列）进行响应
+        if item.column() != 0:
+            return
+        # 注意：为防止因刷新表格再次触发 itemChanged 信号，此处可考虑先断开信号，更新后再连接
+        row = item.row()
+        # 从任务名称所在列（第1列）取出 uid 与 summary
+        uid_item = self.tableWidget.item(row, 1)
+        if uid_item is None:
+            return
+        uid = uid_item.data(QtCore.Qt.UserRole)
+        summary = uid_item.text()
+        is_checked = item.checkState() == QtCore.Qt.Checked
+        new_percent = 100 if is_checked else 0
+        new_status = "COMPLETED" if is_checked else "NEEDS-ACTION"
+        # 更新任务状态后重新刷新任务列表
+        self.task_handler.update_status(uid, summary, new_status, new_percent)
+        self.fetchTasks()
+
+    def refreshTaskTable(self):
+        # 在刷新期间屏蔽信号，防止 itemChanged 导致重复调用
+        self.tableWidget.blockSignals(True)
+        self.tableWidget.setRowCount(0)
+        for task in self.tasks:
+            rowPosition = self.tableWidget.rowCount()
+            self.tableWidget.insertRow(rowPosition)
+
+            # 第0列：完成状态（使用可勾选项），同时保存排序关键字（1：完成，0：未完成）
+            item_completed = SortedItem(
+                "", sort_key=1 if task.status == "COMPLETED" else 0)
+            item_completed.setFlags(
+                QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsUserCheckable)
+            if task.status == "COMPLETED":
+                item_completed.setCheckState(QtCore.Qt.Checked)
+            else:
+                item_completed.setCheckState(QtCore.Qt.Unchecked)
+            self.tableWidget.setItem(rowPosition, 0, item_completed)
+
+            # 第1列：任务名称，同时存储 uid 方便查找任务
+            item_name = SortedItem(task.summary, sort_key=task.summary)
+            item_name.setData(QtCore.Qt.UserRole, task.uid)
+            self.tableWidget.setItem(rowPosition, 1, item_name)
+
+            # 第2列：优先级，先尝试转成数字用于排序
+            try:
+                p_val = int(task.priority)
+            except Exception:
+                p_val = None
+            if p_val is None:
+                display_priority = str(task.priority)
+                sort_priority = 100  # 默认较低优先级
+            else:
+                if p_val == 0:
+                    display_priority = self.translations.get(
+                        "priority_extremely_high", "极高")
+                elif 1 <= p_val <= 3:
+                    display_priority = self.translations.get(
+                        "priority_high", "高")
+                elif 4 <= p_val <= 6:
+                    display_priority = self.translations.get(
+                        "priority_medium", "中")
+                elif 7 <= p_val <= 9:
+                    display_priority = self.translations.get(
+                        "priority_low", "低")
+                else:
+                    display_priority = str(p_val)
+                sort_priority = p_val
+            item_priority = SortedItem(
+                display_priority, sort_key=sort_priority)
+            self.tableWidget.setItem(rowPosition, 2, item_priority)
+
+            # 第3列：截止日期，若为 datetime 则显示格式化后的字符串，否则显示无截止日期，同时以 datetime 对象作排序依据
+            if task.due and isinstance(task.due, datetime.datetime):
+                deadline_str = task.due.strftime('%Y-%m-%d %H:%M')
+                sort_deadline = task.due
+            else:
+                deadline_str = self.translations["no_due"]
+                sort_deadline = datetime.datetime.max
+            item_deadline = SortedItem(deadline_str, sort_key=sort_deadline)
+            self.tableWidget.setItem(rowPosition, 3, item_deadline)
+
+            # 第4列：任务详情（不启用排序，直接使用普通项）
+            detail_str = task.description if task.description else (
+                "无" if self.current_language == "zh" else "None")
+            item_detail = QtWidgets.QTableWidgetItem(detail_str)
+            self.tableWidget.setItem(rowPosition, 4, item_detail)
+        self.tableWidget.blockSignals(False)
+
+    # 其余函数保持不变
     def createMenuBar(self):
         menubar = self.menuBar()
         self.languageMenu = menubar.addMenu(self.translations["language_menu"])
@@ -134,7 +262,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.translations.get("settings", "设置"))
         self.settingsAction.triggered.connect(self.openSettingsDialog)
 
-        # 直接添加“关于”菜单项
         self.aboutAction = menubar.addAction(self.translations["about_menu"])
         self.aboutAction.triggered.connect(self.showAbout)
 
@@ -212,72 +339,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def fetchTasks(self):
         self.tasks = self.task_handler.fetch_tasks()
         self.refreshTaskTable()
-
-    def refreshTaskTable(self):
-        self.tableWidget.setRowCount(0)
-        for task in self.tasks:
-            rowPosition = self.tableWidget.rowCount()
-            self.tableWidget.insertRow(rowPosition)
-
-            checkbox = QtWidgets.QCheckBox()
-            if task.status == "COMPLETED":
-                checkbox.setChecked(True)
-            checkbox.setProperty("uid", task.uid)
-            checkbox.setProperty("summary", task.summary)
-            checkbox.stateChanged.connect(self.onCheckboxStateChanged)
-            self.tableWidget.setCellWidget(rowPosition, 0, checkbox)
-
-            item_name = QtWidgets.QTableWidgetItem(task.summary)
-            item_name.setData(QtCore.Qt.UserRole, task.uid)
-            self.tableWidget.setItem(rowPosition, 1, item_name)
-
-            # 修改优先级显示部分：
-            try:
-                p_val = int(task.priority)
-            except Exception:
-                p_val = None
-            if p_val is None:
-                display_priority = str(task.priority)
-            else:
-                if p_val == 0:
-                    display_priority = self.translations.get(
-                        "priority_extremely_high", "极高")
-                elif 1 <= p_val <= 3:
-                    display_priority = self.translations.get(
-                        "priority_high", "高")
-                elif 4 <= p_val <= 6:
-                    display_priority = self.translations.get(
-                        "priority_medium", "中")
-                elif 7 <= p_val <= 9:
-                    display_priority = self.translations.get(
-                        "priority_low", "低")
-                else:
-                    display_priority = str(p_val)
-            self.tableWidget.setItem(
-                rowPosition, 2, QtWidgets.QTableWidgetItem(display_priority))
-
-            if task.due and isinstance(task.due, datetime.datetime):
-                deadline_str = task.due.strftime('%Y-%m-%d %H:%M')
-            else:
-                deadline_str = self.translations["no_due"]
-            self.tableWidget.setItem(
-                rowPosition, 3, QtWidgets.QTableWidgetItem(deadline_str))
-            detail_str = task.description if task.description else (
-                "无" if self.current_language == "zh" else "None")
-            self.tableWidget.setItem(
-                rowPosition, 4, QtWidgets.QTableWidgetItem(detail_str))
-
-    def onCheckboxStateChanged(self, state):
-        checkbox = self.sender()
-        if not isinstance(checkbox, QtWidgets.QCheckBox):
-            return
-        is_checked = checkbox.isChecked()
-        uid = checkbox.property("uid")
-        summary = checkbox.property("summary")
-        new_percent = 100 if is_checked else 0
-        new_status = "COMPLETED" if is_checked else "NEEDS-ACTION"
-        self.task_handler.update_status(uid, summary, new_status, new_percent)
-        self.fetchTasks()
 
     def openAddTaskDialog(self):
         dialog = AddTaskDialog(self)
@@ -525,3 +586,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def showAbout(self):
         aboutDlg = AboutDialog(self.translations, self)
         aboutDlg.exec_()
+
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication(sys.argv)
+    mainWin = MainWindow()
+    mainWin.show()
+    sys.exit(app.exec_())
