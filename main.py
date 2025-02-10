@@ -1,113 +1,172 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import sys
+import json
+import datetime
+import urllib3
 from PyQt5 import QtWidgets, QtCore, QtGui
 from nextcloudtasks import NextcloudTask, Todo
-from local_tasks import load_local_tasks, save_server_tasks
-import sys
-import datetime
-import json
-import urllib3
+from local_tasks import load_local_tasks, save_local_tasks
+from translation import TRANSLATIONS
 
-TRANSLATIONS = {
-    "zh": {
-        "window_title": "Nextcloud Task 同步客户端",
-        "add_task": "添加任务",
-        "edit_task": "修改任务",
-        "delete_task": "删除任务",
-        "sync_task": "同步任务",
-        "fetch_task": "获取任务",
-        "task_name": "任务名称:",
-        "task_detail": "任务详情:",
-        "priority": "优先级:",
-        "deadline": "截止时间:",
-        "completed": "完成",
-        "restore": "恢复",
-        "quit": "退出",
-        "language_menu": "语言",
-        "about_menu": "关于",
-        "tray_tooltip": "Nextcloud Task 同步客户端",
-        "app_minimized": "应用已最小化到系统托盘",
-        # 消息框相关
-        "connection_error": "连接错误",
-        "connection_failed": "连接 Nextcloud 失败: {}",
-        "fetch_error_title": "获取任务错误",
-        "fetch_error_message": "网络异常，将加载本地数据: {}",
-        "select_task_edit": "请选择一项任务进行修改",
-        "edit_success": "任务已修改",
-        "add_success": "任务已添加并自动同步至服务器",
-        "add_error": "添加任务错误",
-        "sync_error": "同步任务错误",
-        "delete_error": "删除任务错误",
-        "delete_error_sub": "将仅删除本地数据",
-        "delete_success": "任务已删除",
-        "sync_warning": "当前网络不可用，无法与服务器同步，操作仅限本地保存。",
-        "sync_success": "任务同步完成，JSON文件与服务器数据保持一致",
-        "update_error": "更新任务错误",
-        "local_edit_success": "本地任务已修改",
-        "no_local_task": "未找到对应本地任务数据",
-        # 托盘消息相关
-        "tray_deadline_title": "任务提醒",
-        "tray_deadline_message": "任务 '{summary}' 即将到期",
-        # JSON数据不一致时的询问
-        "json_mismatch_title": "数据不一致",
-        "json_mismatch_message": "本地数据与服务器数据不一致，您想使用哪一份数据？",
-        "use_local": "使用本地数据",
-        "use_server": "使用服务器数据",
-        # 关于菜单相关
-        "about_title": "关于",
-        "about_message": "作者：燕园大侠\nGitHub：https://github.com/yanyuandaxia/Nextcloud_task_client"
-    },
-    "en": {
-        "window_title": "Nextcloud Task Sync Client",
-        "add_task": "Add Task",
-        "edit_task": "Edit Task",
-        "delete_task": "Delete Task",
-        "sync_task": "Sync Task",
-        "fetch_task": "Fetch Tasks",
-        "task_name": "Task Name:",
-        "task_detail": "Task Detail:",
-        "priority": "Priority:",
-        "deadline": "Deadline:",
-        "completed": "Completed",
-        "restore": "Restore",
-        "quit": "Quit",
-        "language_menu": "Language",
-        "about_menu": "About",
-        "tray_tooltip": "Nextcloud Task Sync Client",
-        "app_minimized": "Application minimized to system tray",
-        # 消息框相关
-        "connection_error": "Connection Error",
-        "connection_failed": "Failed to connect to Nextcloud: {}",
-        "fetch_error_title": "Fetch Tasks Error",
-        "fetch_error_message": "Network error, loading local data: {}",
-        "select_task_edit": "Please select a task to edit",
-        "edit_success": "Task has been updated",
-        "add_success": "Task added and synced to server successfully",
-        "add_error": "Add Task Error",
-        "sync_error": "Sync Task Error",
-        "delete_error": "Delete Task Error",
-        "delete_error_sub": "Only local data will be deleted",
-        "delete_success": "Task deleted",
-        "sync_warning": "Network unavailable, only local changes will be saved.",
-        "sync_success": "Tasks synced, JSON file updated with server data",
-        "update_error": "Update Task Error",
-        "local_edit_success": "Local task updated",
-        "no_local_task": "Corresponding local task not found",
-        # 托盘消息相关
-        "tray_deadline_title": "Task Reminder",
-        "tray_deadline_message": "Task '{summary}' is about to expire",
-        # JSON数据不一致时的询问
-        "json_mismatch_title": "Data Mismatch",
-        "json_mismatch_message": "Local data and server data are inconsistent. Which one would you like to use?",
-        "use_local": "Use Local Data",
-        "use_server": "Use Server Data",
-        # 关于菜单相关
-        "about_title": "About",
-        "about_message": "Author: Yanyuandaxia\nGitHub: https://github.com/yanyuandaxia/Nextcloud_task_client"
-    }
-}
+# ---------------------------
+# 任务操作处理类
+# ---------------------------
 
-# 添加任务对话框
+
+class TaskHandler:
+    def __init__(self, config, tasks_path, nc_client):
+        self.config = config
+        self.tasks_path = tasks_path
+        self.nc_client = nc_client
+        self.offline_mode = config["offline_mode"]
+
+    def fetch_tasks(self):
+        """
+        获取任务列表：
+          - 离线模式下从 JSON 文件中加载任务
+          - 在线模式下调用 Nextcloud 接口获取任务，并更新本地文件
+        返回任务列表（列表元素为一个简单对象，其属性包括 summary, uid, priority, due, description, status）
+        """
+        if self.offline_mode:
+            tasks_list = load_local_tasks(self.tasks_path)
+            tasks = []
+            for t in tasks_list:
+                tasks.append(self._create_task_object(t))
+            return tasks
+        else:
+            try:
+                self.nc_client.updateTodos()
+                todos = self.nc_client.todos
+                tasks = [Todo(t.data) for t in todos]
+                # 将服务器数据保存到本地
+                tasks_dict_list = [task.to_dict() for task in tasks]
+                save_local_tasks(tasks_dict_list, self.tasks_path)
+                return tasks
+            except Exception as e:
+                # 若在线操作失败，则回退到本地数据
+                tasks_list = load_local_tasks(self.tasks_path)
+                tasks = []
+                for t in tasks_list:
+                    tasks.append(self._create_task_object(t))
+                return tasks
+
+    def add_task(self, task_data):
+        """
+        添加任务：
+          - 离线模式下直接将任务数据追加到 JSON 文件中
+          - 在线模式下先调用 Nextcloud 接口添加任务（若失败则保存到本地）
+        """
+        if self.offline_mode:
+            tasks = load_local_tasks(self.tasks_path)
+            tasks.append(task_data)
+            save_local_tasks(tasks, self.tasks_path)
+        else:
+            try:
+                self.nc_client.addTodo(
+                    task_data["summary"],
+                    priority=task_data["priority"],
+                    percent_complete=0
+                )
+                self.nc_client.updateTodos()
+                uid = self.nc_client.getUidbySummary(task_data["summary"])
+                self.nc_client.updateTodo(
+                    uid,
+                    note=task_data["description"],
+                    due=task_data["due"],
+                    priority=task_data["priority"]
+                )
+            except Exception as e:
+                # 网络出错时，保存到本地
+                tasks = load_local_tasks(self.tasks_path)
+                tasks.append(task_data)
+                save_local_tasks(tasks, self.tasks_path)
+
+    def update_task(self, uid, task_data):
+        """
+        修改任务：
+          - 离线模式下根据 uid 更新 JSON 文件中对应的任务
+          - 在线模式下优先调用 Nextcloud 接口更新，若失败则更新本地数据
+        """
+        if self.offline_mode:
+            tasks = load_local_tasks(self.tasks_path)
+            updated = False
+            for t in tasks:
+                if t.get("uid") == uid:
+                    t.update(task_data)
+                    updated = True
+                    break
+            if updated:
+                save_local_tasks(tasks, self.tasks_path)
+        else:
+            try:
+                self.nc_client.updateTodo(
+                    uid,
+                    summary=task_data["summary"],
+                    note=task_data["description"],
+                    due=task_data["due"],
+                    priority=task_data["priority"]
+                )
+            except Exception as e:
+                tasks = load_local_tasks(self.tasks_path)
+                for t in tasks:
+                    if t.get("uid") == uid:
+                        t.update(task_data)
+                        break
+                save_local_tasks(tasks, self.tasks_path)
+
+    def delete_task(self, uid, summary):
+        """
+        删除任务：
+          - 在线模式下调用 Nextcloud 接口删除任务（若有 uid）
+          - 同时删除本地 JSON 文件中对应的任务数据
+        """
+        if not self.offline_mode and uid:
+            try:
+                self.nc_client.deleteByUid(uid)
+            except Exception as e:
+                pass
+        tasks = load_local_tasks(self.tasks_path)
+        tasks = [t for t in tasks if t.get(
+            "uid") != uid and t.get("summary") != summary]
+        save_local_tasks(tasks, self.tasks_path)
+
+    def update_status(self, uid, summary, new_status, percent_complete):
+        """
+        更新任务状态（例如复选框改变时）：
+          - 更新本地 JSON 文件中对应的任务状态及进度
+          - 在线模式下同时调用 Nextcloud 接口更新任务进度
+        """
+        tasks = load_local_tasks(self.tasks_path)
+        for t in tasks:
+            if (uid and t.get("uid") == uid) or (not uid and t.get("summary") == summary):
+                t["status"] = new_status
+                t["percent_complete"] = percent_complete
+                break
+        save_local_tasks(tasks, self.tasks_path)
+        if not self.offline_mode and uid:
+            try:
+                self.nc_client.updateTodo(
+                    uid, percent_complete=percent_complete)
+            except Exception as e:
+                pass
+
+    def _create_task_object(self, t):
+        """
+        将字典数据转换为一个简单的对象，方便在 UI 中通过属性访问任务信息
+        """
+        task = type("LocalTask", (), {})()
+        task.summary = t.get("summary", "")
+        task.uid = t.get("uid", "")
+        task.priority = t.get("priority", "")
+        task.due = t.get("due", None)
+        task.description = t.get("description", "")
+        task.status = t.get("status", "NEEDS-ACTION")
+        return task
+
+# ---------------------------
+# 添加任务对话框（修改处：支持“无到期时间”）
+# ---------------------------
 
 
 class AddTaskDialog(QtWidgets.QDialog):
@@ -127,6 +186,11 @@ class AddTaskDialog(QtWidgets.QDialog):
             QtCore.QDateTime.currentDateTime())
         self.deadlineEdit.setCalendarPopup(True)
 
+        # 新增复选框，允许设置无到期时间
+        self.noDeadlineCheck = QtWidgets.QCheckBox(
+            self.translations[self.current_language]["no_due"])
+        self.noDeadlineCheck.stateChanged.connect(self.toggleDeadline)
+
         layout.addRow(
             self.translations[self.current_language]["task_name"], self.taskNameEdit)
         layout.addRow(
@@ -135,6 +199,7 @@ class AddTaskDialog(QtWidgets.QDialog):
             self.translations[self.current_language]["priority"], self.prioritySpin)
         layout.addRow(
             self.translations[self.current_language]["deadline"], self.deadlineEdit)
+        layout.addRow("", self.noDeadlineCheck)
 
         buttonBox = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
@@ -142,16 +207,29 @@ class AddTaskDialog(QtWidgets.QDialog):
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
 
+    def toggleDeadline(self, state):
+        """当勾选无到期时间时，禁用日期时间编辑控件"""
+        if state == QtCore.Qt.Checked:
+            self.deadlineEdit.setEnabled(False)
+        else:
+            self.deadlineEdit.setEnabled(True)
+
     def getData(self):
+        # 如果勾选无到期时间，则返回 due 为 None
+        due = None if self.noDeadlineCheck.isChecked(
+        ) else self.deadlineEdit.dateTime().toPyDateTime()
         return {
             "summary": self.taskNameEdit.text(),
             "description": self.taskDetailEdit.toPlainText(),
             "priority": self.prioritySpin.value(),
-            "due": self.deadlineEdit.dateTime().toPyDateTime()
+            "due": due
         }
 
+# ---------------------------
+# 修改任务对话框
+# ---------------------------
 
-# 修改任务对话框，预填已有任务数据
+
 class EditTaskDialog(QtWidgets.QDialog):
     def __init__(self, parent, task):
         super(EditTaskDialog, self).__init__(parent)
@@ -199,8 +277,11 @@ class EditTaskDialog(QtWidgets.QDialog):
             "due": self.deadlineEdit.dateTime().toPyDateTime()
         }
 
+# ---------------------------
+# 主窗口
+# ---------------------------
 
-# 主窗口：显示任务列表（只读）、添加任务、修改任务、同步任务等
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -214,6 +295,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 config = json.load(f)
             return config
         self.config = load_conf(self.path_conf)
+        if not self.config["ssl_verify_cert"]:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.path_tasks = self.config["tasks_json_path"]
         self.path_icon = self.config["icon_path"]
         self.current_language = self.config["language"]  # "zh" 或 "en"
@@ -226,15 +309,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.createTrayIcon()
         self.setWindowIcon(QtGui.QIcon(self.path_icon))
         self.setupDeadlineChecker()
-        self.setupServerTasksChecker()
+        if not self.config['offline_mode']:
+            self.setupServerTasksChecker()
 
-        # 从文件加载本地任务列表（JSON 格式）
-        self.local_tasks = load_local_tasks(self.path_tasks)
-        self.tasks = None
-
-        if not self.config["ssl_verify_cert"]:
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        # 加载 Nextcloud 参数，初始化客户端
+        # 初始化 Nextcloud 客户端（在线模式下）
         self.nc_client = NextcloudTask(config=self.config)
         if not self.config['offline_mode']:
             try:
@@ -247,6 +325,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.translations[self.current_language]["connection_failed"].format(
                         e)
                 )
+        # 初始化任务处理器（在线或离线均可）
+        self.task_handler = TaskHandler(
+            self.config, self.path_tasks, self.nc_client)
 
     def initUI(self):
         centralWidget = QtWidgets.QWidget()
@@ -292,8 +373,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fetchButton.clicked.connect(self.fetchTasks)
         self.addButton.clicked.connect(self.openAddTaskDialog)
         self.editButton.clicked.connect(self.editTask)
-        self.syncButton.clicked.connect(self.syncServerTasks)
         self.deleteButton.clicked.connect(self.deleteTask)
+        self.syncButton.clicked.connect(self.syncServerTasks)
 
     def createMenuBar(self):
         menubar = self.menuBar()
@@ -319,7 +400,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updateTranslations()
 
     def updateTranslations(self):
-        # 更新主窗口及各控件文本
         self.setWindowTitle(
             self.translations[self.current_language]["window_title"])
         self.tableWidget.setHorizontalHeaderLabels([
@@ -361,7 +441,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.translations[self.current_language]["about_menu"])
 
     def showAbout(self):
-        # 弹出关于窗口，显示作者和 GitHub 链接
         QtWidgets.QMessageBox.information(
             self,
             self.translations[self.current_language]["about_title"],
@@ -387,157 +466,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         event.ignore()
         self.hide()
-        # self.trayIcon.showMessage(
-        #     self.translations[self.current_language]["window_title"],
-        #     self.translations[self.current_language]["app_minimized"],
-        #     QtWidgets.QSystemTrayIcon.Information, 2000
-        # )
-
-    def checkLocalServerTasks(self):
-        def normalize_due_datetime(due):
-            if isinstance(due, datetime.datetime):
-                return due
-            try:
-                # 尝试 ISO 格式（带 T 分隔符）
-                dt = datetime.datetime.strptime(due, "%Y-%m-%dT%H:%M:%S")
-                return dt
-            except Exception:
-                try:
-                    # 尝试空格分隔的格式
-                    dt = datetime.datetime.strptime(due, "%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    return None
-
-        def compare_data(local_data, server_tasks):
-            local_data_in = local_data.copy()
-            server_tasks_in = server_tasks.copy()
-            local_data_in.sort(key=lambda x: x.get("uid", ""))
-            server_tasks_in.sort(key=lambda x: x.get("uid", ""))
-            # print(local_data_in, server_tasks_in)
-            # 本地数据与服务器数据不一致时返回 True
-            if len(local_data) != len(server_tasks):
-                return True
-            for i, task in enumerate(local_data_in):
-                task['due'] = normalize_due_datetime(task.get('due', ''))
-                server_tasks_in[i]['due'] = normalize_due_datetime(
-                    server_tasks_in[i].get('due', ''))
-                if str(task) != str(server_tasks_in[i]):
-                    return True
-            return False
-
-        try:
-            if self.config['offline_mode']:
-                raise Exception("offline mode")
-            self.nc_client.updateTodos()
-            todos = self.nc_client.todos
-            self.tasks = []
-            for t in todos:
-                task = Todo(t.data)
-                self.tasks.append(task)
-            # 将服务器任务转换为字典列表
-            server_tasks = [task.to_dict() for task in self.tasks]
-            # 加载本地 JSON 数据并归一化 due 字段
-            local_data = load_local_tasks(self.path_tasks)
-            # 比较本地与服务器数据（归一化后的）
-            if compare_data(local_data, server_tasks):
-                msgBox = QtWidgets.QMessageBox(self)
-                msgBox.setWindowTitle(
-                    self.translations[self.current_language]["json_mismatch_title"])
-                msgBox.setText(
-                    self.translations[self.current_language]["json_mismatch_message"])
-                btnLocal = msgBox.addButton(
-                    self.translations[self.current_language]["use_local"], QtWidgets.QMessageBox.AcceptRole)
-                btnServer = msgBox.addButton(
-                    self.translations[self.current_language]["use_server"], QtWidgets.QMessageBox.RejectRole)
-                msgBox.exec_()
-                if msgBox.clickedButton() == btnLocal:
-                    final_tasks = local_data
-                    self.syncServerTasks(check=False)
-                else:
-                    final_tasks = server_tasks
-            else:
-                final_tasks = server_tasks
-            # 保存最终数据到本地 JSON 文件
-            save_server_tasks(final_tasks, self.path_tasks)
-        except Exception as e:
-            print(e)
-            if str(e) != "offline mode":
-                QtWidgets.QMessageBox.critical(
-                    self,
-                    self.translations[self.current_language]["fetch_error_title"],
-                    self.translations[self.current_language]["fetch_error_message"].format(
-                        e)
-                )
-        self.refreshTaskTable()
 
     def fetchTasks(self):
-        try:
-            if self.config['offline_mode']:
-                raise Exception("offline mode")
-            self.nc_client.updateTodos()
-            todos = self.nc_client.todos
-            self.tasks = []
-            for t in todos:
-                task = Todo(t.data)
-                self.tasks.append(task)
-            # 保存服务器任务到本地 JSON 文件
-            tasks_list = [task.to_dict() for task in self.tasks]
-            save_server_tasks([], self.path_tasks)
-            save_server_tasks(tasks_list, self.path_tasks)
-        except Exception as e:
-            if str(e) != "offline mode":
-                QtWidgets.QMessageBox.critical(
-                    self,
-                    self.translations[self.current_language]["fetch_error_title"],
-                    self.translations[self.current_language]["fetch_error_message"].format(
-                        e)
-                )
-            # 网络异常则加载本地数据
-            tasks_list = load_local_tasks(self.path_tasks)
-            self.tasks = []
-            for t in tasks_list:
-                local_task = type("LocalTask", (), {})()
-                local_task.summary = t.get("summary", "")
-                local_task.uid = t.get("uid", "")
-                local_task.priority = t.get("priority", "")
-                local_task.due = t.get("due", None)
-                local_task.status = t.get("status", "")
-                self.tasks.append(local_task)
+        """使用 TaskHandler 获取任务，并刷新任务表"""
+        self.tasks = self.task_handler.fetch_tasks()
         self.refreshTaskTable()
 
     def refreshTaskTable(self):
-        self.tableWidget.setRowCount(0)
-        try:
-            if self.config['offline_mode']:
-                raise Exception("offline mode")
-            self.nc_client.updateTodos()
-            todos = self.nc_client.todos
-            self.tasks = []
-            for t in todos:
-                task = Todo(t.data)
-                self.tasks.append(task)
-            tasks_list = [task.to_dict() for task in self.tasks]
-            save_server_tasks(tasks_list, self.path_tasks)
-        except Exception as e:
-            if str(e) != "offline mode":
-                QtWidgets.QMessageBox.critical(
-                    self,
-                    self.translations[self.current_language]["fetch_error_title"],
-                    self.translations[self.current_language]["fetch_error_message"].format(
-                        e)
-                )
-            tasks_list = load_local_tasks(self.path_tasks)
-            self.tasks = []
-            for t in tasks_list:
-                local_task = type("LocalTask", (), {})()
-                local_task.summary = t.get("summary", "")
-                local_task.uid = t.get("uid", "")
-                local_task.priority = t.get("priority", "")
-                local_task.due = t.get("due", None)
-                local_task.description = t.get("description", "")
-                local_task.status = t.get("status", "NEEDS-ACTION")
-                self.tasks.append(local_task)
-
         self.tableWidget.setRowCount(0)
         for task in self.tasks:
             rowPosition = self.tableWidget.rowCount()
@@ -556,8 +491,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tableWidget.setItem(rowPosition, 1, item_name)
             self.tableWidget.setItem(
                 rowPosition, 2, QtWidgets.QTableWidgetItem(str(task.priority)))
-            deadline_str = task.due.strftime(
-                '%Y-%m-%d %H:%M') if task.due else "无"
+            if task.due and isinstance(task.due, datetime.datetime):
+                deadline_str = task.due.strftime('%Y-%m-%d %H:%M')
+            else:
+                deadline_str = "无"
             self.tableWidget.setItem(
                 rowPosition, 3, QtWidgets.QTableWidgetItem(deadline_str))
             detail_str = task.description if task.description else "无"
@@ -573,63 +510,21 @@ class MainWindow(QtWidgets.QMainWindow):
         summary = checkbox.property("summary")
         new_percent = 100 if is_checked else 0
         new_status = "COMPLETED" if is_checked else "NEEDS-ACTION"
-
-        if uid:
-            try:
-                if self.config['offline_mode']:
-                    raise Exception("offline mode")
-                self.nc_client.updateTodo(uid, percent_complete=new_percent)
-            except Exception as e:
-                if str(e) != "offline mode":
-                    QtWidgets.QMessageBox.warning(
-                        self,
-                        self.translations[self.current_language]["update_error"],
-                        f"{self.translations[self.current_language]['update_error']}: {summary} 更新失败: {e}"
-                    )
-
-        tasks = load_local_tasks(self.path_tasks)
-        updated = False
-        for task in tasks:
-            if (uid and task.get("uid") == uid) or (not uid and task.get("summary") == summary):
-                task["status"] = new_status
-                task["percent_complete"] = new_percent
-                updated = True
-        if updated:
-            save_server_tasks(tasks, self.path_tasks)
+        self.task_handler.update_status(uid, summary, new_status, new_percent)
         self.fetchTasks()
 
     def openAddTaskDialog(self):
         dialog = AddTaskDialog(self)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             data = dialog.getData()
-            self.local_tasks.append(data)
-            save_server_tasks(self.local_tasks, self.path_tasks)
-
-            try:
-                if self.config['offline_mode']:
-                    raise Exception("offline mode")
-                self.nc_client.addTodo(
-                    data["summary"], priority=data["priority"], percent_complete=0)
-                self.nc_client.updateTodos()
-                uid = self.nc_client.getUidbySummary(data["summary"])
-                self.nc_client.updateTodo(uid,
-                                          note=data["description"],
-                                          due=data["due"],
-                                          priority=data["priority"])
-                self.local_tasks.remove(data)
-                save_server_tasks(self.local_tasks, self.path_tasks)
-                QtWidgets.QMessageBox.information(
-                    self,
-                    self.translations[self.current_language]["add_task"],
-                    self.translations[self.current_language]["add_success"]
-                )
-            except Exception as e:
-                if str(e) != "offline mode":
-                    QtWidgets.QMessageBox.critical(
-                        self,
-                        self.translations[self.current_language]["add_error"],
-                        str(e)
-                    )
+            self.task_handler.add_task(data)
+            # 离线或在线均认为任务添加成功（在线时错误将在 TaskHandler 内处理）
+            QtWidgets.QMessageBox.information(
+                self,
+                self.translations[self.current_language]["add_task"],
+                self.translations[self.current_language].get(
+                    "add_success", "任务添加成功")
+            )
             self.fetchTasks()
 
     def editTask(self):
@@ -644,72 +539,49 @@ class MainWindow(QtWidgets.QMainWindow):
         row = selectedItems[0].row()
         uid = self.tableWidget.item(row, 1).data(QtCore.Qt.UserRole)
         if uid:
-            try:
-                task_obj = next((t for t in self.tasks if t.uid == uid), None)
+            task_obj = next((t for t in self.tasks if t.uid == uid), None)
+            if not task_obj:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    self.translations[self.current_language]["edit_task"],
+                    self.translations[self.current_language].get(
+                        "no_task_found", "未找到该任务")
+                )
+                return
+            dialog = EditTaskDialog(self, task_obj)
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                data = dialog.getData()
+                self.task_handler.update_task(uid, data)
+                QtWidgets.QMessageBox.information(
+                    self,
+                    self.translations[self.current_language]["edit_task"],
+                    self.translations[self.current_language].get(
+                        "edit_success", "任务修改成功")
+                )
+                self.fetchTasks()
+        else:
+            # 离线模式下可能无 uid，通过任务名称匹配
+            task_name = self.tableWidget.item(row, 1).text()
+            task_obj = next(
+                (t for t in self.tasks if t.summary == task_name), None)
+            if task_obj:
                 dialog = EditTaskDialog(self, task_obj)
                 if dialog.exec_() == QtWidgets.QDialog.Accepted:
                     data = dialog.getData()
-                    try:
-                        if self.config['offline_mode']:
-                            raise Exception("offline mode")
-                        self.nc_client.updateTodo(uid,
-                                                  summary=data["summary"],
-                                                  note=data["description"],
-                                                  due=data["due"],
-                                                  priority=data["priority"])
-                        QtWidgets.QMessageBox.information(
-                            self,
-                            self.translations[self.current_language]["edit_task"],
-                            self.translations[self.current_language]["edit_success"]
-                        )
-                    except Exception as e:
-                        if str(e) != "offline mode":
-                            QtWidgets.QMessageBox.warning(
-                                self,
-                                self.translations[self.current_language]["update_error"],
-                                f"{self.translations[self.current_language]['update_error']}: 网络错误，将仅更新本地数据.\n错误信息: {e}"
-                            )
-                        tasks = load_local_tasks(self.path_tasks)
-                        updated = False
-                        for t in tasks:
-                            if t.get("uid") == uid:
-                                t.update(data)
-                                updated = True
-                                break
-                        if updated:
-                            save_server_tasks(tasks, self.path_tasks)
-                    self.fetchTasks()
-            except Exception as e:
-                QtWidgets.QMessageBox.critical(
-                    self,
-                    self.translations[self.current_language]["edit_task"],
-                    str(e)
-                )
-        else:
-            index = None
-            task_name = self.tableWidget.item(row, 1).text()
-            for i, task in enumerate(self.local_tasks):
-                if task.get("summary") == task_name:
-                    index = i
-                    break
-            if index is not None:
-                dialog = EditTaskDialog(self, type(
-                    "LocalTask", (), self.local_tasks[index])())
-                if dialog.exec_() == QtWidgets.QDialog.Accepted:
-                    data = dialog.getData()
-                    self.local_tasks[index] = data
-                    save_server_tasks(self.local_tasks, self.path_tasks)
+                    self.task_handler.update_task(task_obj.uid, data)
                     QtWidgets.QMessageBox.information(
                         self,
                         self.translations[self.current_language]["edit_task"],
-                        self.translations[self.current_language]["local_edit_success"]
+                        self.translations[self.current_language].get(
+                            "local_edit_success", "本地任务修改成功")
                     )
                     self.fetchTasks()
             else:
                 QtWidgets.QMessageBox.warning(
                     self,
                     self.translations[self.current_language]["edit_task"],
-                    self.translations[self.current_language]["no_local_task"]
+                    self.translations[self.current_language].get(
+                        "no_local_task", "未找到本地任务")
                 )
 
     def deleteTask(self):
@@ -724,38 +596,109 @@ class MainWindow(QtWidgets.QMainWindow):
         row = selectedItems[0].row()
         summary = self.tableWidget.item(row, 1).text()
         uid = self.tableWidget.item(row, 1).data(QtCore.Qt.UserRole)
-
-        if uid:
-            try:
-                if self.config['offline_mode']:
-                    raise Exception("offline mode")
-                self.nc_client.deleteByUid(uid)
-            except Exception as e:
-                if str(e) != "offline mode":
-                    QtWidgets.QMessageBox.warning(
-                        self,
-                        self.translations[self.current_language]["delete_error"],
-                        f"{self.translations[self.current_language]['delete_error']}:{e}\n{self.translations[self.current_language]['delete_error_sub']}"
-                    )
-        tasks = load_local_tasks(self.path_tasks)
-        new_tasks = [task for task in tasks if task.get(
-            "uid") != uid and task.get("summary") != summary]
-        save_server_tasks(new_tasks, self.path_tasks)
-        self.tasks = load_local_tasks(self.path_tasks)
-
+        self.task_handler.delete_task(uid, summary)
         QtWidgets.QMessageBox.information(
             self,
             self.translations[self.current_language]["delete_task"],
-            self.translations[self.current_language]["delete_success"]
+            self.translations[self.current_language].get(
+                "delete_success", "任务删除成功")
         )
         self.fetchTasks()
 
+    def checkLocalServerTasks(self):
+        """
+        同步前比对本地与服务器数据，仅在在线模式下使用
+        """
+        if self.config['offline_mode']:
+            QtWidgets.QMessageBox.information(
+                self,
+                self.translations[self.current_language]["sync_task"],
+                self.translations[self.current_language]["no_offline_mode_sync"],
+            )
+            return
+
+        def normalize_due_datetime(due):
+            if isinstance(due, datetime.datetime):
+                return due
+            try:
+                dt = datetime.datetime.strptime(due, "%Y-%m-%dT%H:%M:%S")
+                return dt
+            except Exception:
+                try:
+                    dt = datetime.datetime.strptime(due, "%Y-%m-%d %H:%M:%S")
+                    return dt
+                except Exception:
+                    return None
+
+        def data_is_same(local_data, server_tasks):
+            local_data_in = local_data.copy()
+            server_tasks_in = server_tasks.copy()
+            local_data_in.sort(key=lambda x: x.get("uid", ""))
+            server_tasks_in.sort(key=lambda x: x.get("uid", ""))
+            if len(local_data) != len(server_tasks):
+                return False
+            for i, task in enumerate(local_data_in):
+                task['due'] = normalize_due_datetime(task.get('due', ''))
+                server_tasks_in[i]['due'] = normalize_due_datetime(
+                    server_tasks_in[i].get('due', ''))
+                if str(task) != str(server_tasks_in[i]):
+                    return False
+            return True
+
+        try:
+            self.nc_client.updateTodos()
+            todos = self.nc_client.todos
+            self.tasks = [Todo(t.data) for t in todos]
+            server_tasks = [task.to_dict() for task in self.tasks]
+            local_data = load_local_tasks(self.path_tasks)
+            print(local_data)
+            print(server_tasks)
+            if not data_is_same(local_data, server_tasks):
+                msgBox = QtWidgets.QMessageBox(self)
+                msgBox.setWindowTitle(
+                    self.translations[self.current_language]["json_mismatch_title"])
+                msgBox.setText(
+                    self.translations[self.current_language]["json_mismatch_message"])
+                btnLocal = msgBox.addButton(
+                    self.translations[self.current_language]["use_local"], QtWidgets.QMessageBox.AcceptRole)
+                btnServer = msgBox.addButton(
+                    self.translations[self.current_language]["use_server"], QtWidgets.QMessageBox.RejectRole)
+                msgBox.exec_()
+                if msgBox.clickedButton() == btnLocal:
+                    final_tasks = local_data
+                    self.syncServerTasks(check=False)
+                elif msgBox.clickedButton() == btnServer:
+                    final_tasks = server_tasks
+                else:
+                    raise Exception("msgBox button error")
+            else:
+                final_tasks = server_tasks
+            save_local_tasks(final_tasks, self.path_tasks)
+        except Exception as e:
+            print(e)
+            QtWidgets.QMessageBox.critical(
+                self,
+                self.translations[self.current_language]["fetch_error_title"],
+                self.translations[self.current_language]["fetch_error_message"].format(
+                    e)
+            )
+        self.refreshTaskTable()
+
     def syncServerTasks(self, check=True):
+        """
+        将本地 JSON 数据同步到服务器，仅在在线模式下使用
+        """
+        if self.config['offline_mode']:
+            QtWidgets.QMessageBox.information(
+                self,
+                self.translations[self.current_language]["sync_task"],
+                self.translations[self.current_language]["no_offline_mode_sync"],
+            )
+            return
+
         if check:
             self.checkLocalServerTasks()
         try:
-            if self.config['offline_mode']:
-                raise Exception("offline mode")
             self.nc_client.updateTodos()
         except Exception as e:
             QtWidgets.QMessageBox.warning(
@@ -770,8 +713,10 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 if not task.get("uid"):
                     self.nc_client.addTodo(
-                        task["summary"], priority=task["priority"],
-                        percent_complete=task['percent_complete'])
+                        task["summary"],
+                        priority=task["priority"],
+                        percent_complete=task.get('percent_complete', 0)
+                    )
                     self.nc_client.updateTodos()
                     uid = self.nc_client.getUidbySummary(task["summary"])
                     self.nc_client.updateTodo(
@@ -779,7 +724,8 @@ class MainWindow(QtWidgets.QMainWindow):
                         note=task["description"],
                         due=task["due"],
                         priority=task["priority"],
-                        percent_complete=task['percent_complete'],)
+                        percent_complete=task.get('percent_complete', 0)
+                    )
                     task["uid"] = uid
                 else:
                     self.nc_client.updateTodo(
@@ -788,7 +734,8 @@ class MainWindow(QtWidgets.QMainWindow):
                         note=task.get("description", ""),
                         due=task["due"],
                         priority=task["priority"],
-                        percent_complete=task['percent_complete'],)
+                        percent_complete=task.get('percent_complete', 0)
+                    )
             except Exception as ex:
                 print(
                     f"{task['summary']} \n{self.translations[self.current_language]['sync_error']}: {ex}")
@@ -797,11 +744,8 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             self.nc_client.updateTodos()
             todos = self.nc_client.todos
-            server_tasks = []
-            for t in todos:
-                task_obj = Todo(t.data)
-                server_tasks.append(task_obj.to_dict())
-            save_server_tasks(server_tasks, self.path_tasks)
+            server_tasks = [Todo(t.data).to_dict() for t in todos]
+            save_local_tasks(server_tasks, self.path_tasks)
         except Exception as ex:
             print(
                 f"{self.translations[self.current_language]['sync_error']}: {ex}")
@@ -821,19 +765,14 @@ class MainWindow(QtWidgets.QMainWindow):
     def checkDeadlines(self):
         now = datetime.datetime.now()
         for task in self.tasks:
-            # print(task.__dict__)
             if task.due and now > task.due - datetime.timedelta(minutes=10) and now < task.due:
                 title = self.translations[self.current_language]["tray_deadline_title"]
                 msg_template = self.translations[self.current_language]["tray_deadline_message"]
                 msg = msg_template.format(summary=task.summary)
                 self.trayIcon.showMessage(
                     title, msg, QtWidgets.QSystemTrayIcon.Warning, 5000)
-                if self.config['show_ddl_message_box']:
-                    QtWidgets.QMessageBox.warning(
-                        self,
-                        title,
-                        f"{msg}"
-                    )
+                if self.config.get('show_ddl_message_box', False):
+                    QtWidgets.QMessageBox.warning(self, title, msg)
 
     def setupServerTasksChecker(self):
         self.serverTimer = QtCore.QTimer(self)
@@ -845,9 +784,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 def main():
-    app = QtWidgets.QApplication(sys.argv)
+    if not QtWidgets.QApplication.instance():
+        app = QtWidgets.QApplication(sys.argv)
+    else:
+        app = QtWidgets.QApplication.instance()
     window = MainWindow()
-    window.checkLocalServerTasks()
+    if not window.config['offline_mode']:
+        window.checkLocalServerTasks()
+    window.fetchTasks()
     window.show()
     sys.exit(app.exec_())
 

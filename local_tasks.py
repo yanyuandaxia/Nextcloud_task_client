@@ -26,7 +26,7 @@ def load_local_tasks(path_tasks):
     return tasks
 
 
-def save_server_tasks(tasks, path_tasks):
+def save_local_tasks(tasks, path_tasks):
     """
     将任务列表保存到 tasks.json 中。
     如果任务中包含 datetime 类型的截止时间，则转换为字符串保存。
