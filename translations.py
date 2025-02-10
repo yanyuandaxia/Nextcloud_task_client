@@ -47,7 +47,26 @@ TRANSLATIONS = {
         "use_server": "使用服务器数据",
         # 关于菜单相关
         "about_title": "关于",
-        "about_message": "作者：燕园大侠\nGitHub：https://github.com/yanyuandaxia/Nextcloud_task_client"
+        "about_message": "作者：燕园大侠\nGitHub：https://github.com/yanyuandaxia/Nextcloud_task_client",
+        # 设置对话框相关（语言项已移除）
+        "settings": "设置",
+        "settings_title": "设置",
+        "tasks_json_path_label": "任务JSON路径:",
+        "icon_path_label": "图标路径:",
+        "url_label": "URL:",
+        "username_label": "用户名:",
+        "password_label": "密码:",
+        "check_interval_label": "检查间隔（秒）:",
+        "show_ddl_label": "显示截止消息框:",
+        "ssl_verify_label": "验证SSL证书:",
+        "offline_mode_label": "离线模式:",
+        "json_format_error": "JSON格式错误: {}",
+        "error": "错误",
+        "failed_write_config": "写入配置失败: {}",
+        "config_saved": "配置保存成功，请重启应用使配置生效。",
+        "config_updated": "配置已更新。",
+        "reload_config_failed": "重新加载配置失败: {}",
+        "cannot_load_config": "无法加载配置文件，请检查配置。"
     },
     "en": {
         "window_title": "Nextcloud Task Sync Client",
@@ -68,7 +87,7 @@ TRANSLATIONS = {
         "tray_tooltip": "Nextcloud Task Sync Client",
         "app_minimized": "Application minimized to system tray",
         "no_due": "No due date",
-        # 消息框相关
+        # Message box related
         "connection_error": "Connection Error",
         "connection_failed": "Failed to connect to Nextcloud: {}",
         "fetch_error_title": "Fetch Tasks Error",
@@ -87,16 +106,35 @@ TRANSLATIONS = {
         "local_edit_success": "Local task updated",
         "no_local_task": "Corresponding local task not found",
         "no_offline_mode_sync": "Not available in offline mode",
-        # 托盘消息相关
+        # Tray message related
         "tray_deadline_title": "Task Reminder",
         "tray_deadline_message": "Task '{summary}' is about to expire",
-        # JSON数据不一致时的询问
+        # JSON mismatch
         "json_mismatch_title": "Data Mismatch",
         "json_mismatch_message": "Local data and server data are inconsistent. Which one would you like to use?",
         "use_local": "Use Local Data",
         "use_server": "Use Server Data",
-        # 关于菜单相关
+        # About
         "about_title": "About",
-        "about_message": "Author: Yanyuandaxia\nGitHub: https://github.com/yanyuandaxia/Nextcloud_task_client"
+        "about_message": "Author: Yanyuandaxia\nGitHub: https://github.com/yanyuandaxia/Nextcloud_task_client",
+        # Settings dialog related (language item removed)
+        "settings": "Settings",
+        "settings_title": "Settings",
+        "tasks_json_path_label": "Tasks JSON Path:",
+        "icon_path_label": "Icon Path:",
+        "url_label": "URL:",
+        "username_label": "Username:",
+        "password_label": "Password:",
+        "check_interval_label": "Check Interval (seconds):",
+        "show_ddl_label": "Show DDL Message Box:",
+        "ssl_verify_label": "SSL Verify Cert:",
+        "offline_mode_label": "Offline Mode:",
+        "json_format_error": "Invalid JSON format: {}",
+        "error": "Error",
+        "failed_write_config": "Failed to write config: {}",
+        "config_saved": "Configuration saved successfully. Please restart the application to apply changes.",
+        "config_updated": "Configuration updated.",
+        "reload_config_failed": "Failed to reload configuration: {}",
+        "cannot_load_config": "Unable to load configuration file, please check the configuration."
     }
 }

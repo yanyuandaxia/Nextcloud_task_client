@@ -7,7 +7,7 @@ import urllib3
 from PyQt5 import QtWidgets, QtCore, QtGui
 from nextcloudtasks import NextcloudTask, Todo
 from local_tasks import load_local_tasks, save_local_tasks
-from translation import TRANSLATIONS
+from translations import TRANSLATIONS
 
 # ---------------------------
 # 任务操作处理类
@@ -22,72 +22,45 @@ class TaskHandler:
         self.offline_mode = config["offline_mode"]
 
     def fetch_tasks(self):
-        """
-        获取任务列表：
-          - 离线模式下从 JSON 文件中加载任务
-          - 在线模式下调用 Nextcloud 接口获取任务，并更新本地文件
-        返回任务列表（列表元素为一个简单对象，其属性包括 summary, uid, priority, due, description, status）
-        """
         if self.offline_mode:
             tasks_list = load_local_tasks(self.tasks_path)
-            tasks = []
-            for t in tasks_list:
-                tasks.append(self._create_task_object(t))
+            tasks = [self._create_task_object(t) for t in tasks_list]
             return tasks
         else:
             try:
                 self.nc_client.updateTodos()
                 todos = self.nc_client.todos
                 tasks = [Todo(t.data) for t in todos]
-                # 将服务器数据保存到本地
                 tasks_dict_list = [task.to_dict() for task in tasks]
                 save_local_tasks(tasks_dict_list, self.tasks_path)
                 return tasks
             except Exception as e:
-                # 若在线操作失败，则回退到本地数据
                 tasks_list = load_local_tasks(self.tasks_path)
-                tasks = []
-                for t in tasks_list:
-                    tasks.append(self._create_task_object(t))
+                tasks = [self._create_task_object(t) for t in tasks_list]
                 return tasks
 
     def add_task(self, task_data):
-        """
-        添加任务：
-          - 离线模式下直接将任务数据追加到 JSON 文件中
-          - 在线模式下先调用 Nextcloud 接口添加任务（若失败则保存到本地）
-        """
         if self.offline_mode:
             tasks = load_local_tasks(self.tasks_path)
             tasks.append(task_data)
             save_local_tasks(tasks, self.tasks_path)
         else:
             try:
-                self.nc_client.addTodo(
-                    task_data["summary"],
-                    priority=task_data["priority"],
-                    percent_complete=0
-                )
+                self.nc_client.addTodo(task_data["summary"],
+                                       priority=task_data["priority"],
+                                       percent_complete=0)
                 self.nc_client.updateTodos()
                 uid = self.nc_client.getUidbySummary(task_data["summary"])
-                self.nc_client.updateTodo(
-                    uid,
-                    note=task_data["description"],
-                    due=task_data["due"],
-                    priority=task_data["priority"]
-                )
+                self.nc_client.updateTodo(uid,
+                                          note=task_data["description"],
+                                          due=task_data["due"],
+                                          priority=task_data["priority"])
             except Exception as e:
-                # 网络出错时，保存到本地
                 tasks = load_local_tasks(self.tasks_path)
                 tasks.append(task_data)
                 save_local_tasks(tasks, self.tasks_path)
 
     def update_task(self, uid, task_data):
-        """
-        修改任务：
-          - 离线模式下根据 uid 更新 JSON 文件中对应的任务
-          - 在线模式下优先调用 Nextcloud 接口更新，若失败则更新本地数据
-        """
         if self.offline_mode:
             tasks = load_local_tasks(self.tasks_path)
             updated = False
@@ -100,13 +73,11 @@ class TaskHandler:
                 save_local_tasks(tasks, self.tasks_path)
         else:
             try:
-                self.nc_client.updateTodo(
-                    uid,
-                    summary=task_data["summary"],
-                    note=task_data["description"],
-                    due=task_data["due"],
-                    priority=task_data["priority"]
-                )
+                self.nc_client.updateTodo(uid,
+                                          summary=task_data["summary"],
+                                          note=task_data["description"],
+                                          due=task_data["due"],
+                                          priority=task_data["priority"])
             except Exception as e:
                 tasks = load_local_tasks(self.tasks_path)
                 for t in tasks:
@@ -116,11 +87,6 @@ class TaskHandler:
                 save_local_tasks(tasks, self.tasks_path)
 
     def delete_task(self, uid, summary):
-        """
-        删除任务：
-          - 在线模式下调用 Nextcloud 接口删除任务（若有 uid）
-          - 同时删除本地 JSON 文件中对应的任务数据
-        """
         if not self.offline_mode and uid:
             try:
                 self.nc_client.deleteByUid(uid)
@@ -132,11 +98,6 @@ class TaskHandler:
         save_local_tasks(tasks, self.tasks_path)
 
     def update_status(self, uid, summary, new_status, percent_complete):
-        """
-        更新任务状态（例如复选框改变时）：
-          - 更新本地 JSON 文件中对应的任务状态及进度
-          - 在线模式下同时调用 Nextcloud 接口更新任务进度
-        """
         tasks = load_local_tasks(self.tasks_path)
         for t in tasks:
             if (uid and t.get("uid") == uid) or (not uid and t.get("summary") == summary):
@@ -152,9 +113,6 @@ class TaskHandler:
                 pass
 
     def _create_task_object(self, t):
-        """
-        将字典数据转换为一个简单的对象，方便在 UI 中通过属性访问任务信息
-        """
         task = type("LocalTask", (), {})()
         task.summary = t.get("summary", "")
         task.uid = t.get("uid", "")
@@ -165,7 +123,7 @@ class TaskHandler:
         return task
 
 # ---------------------------
-# 添加任务对话框（修改处：支持“无到期时间”）
+# 添加任务对话框（支持“无到期时间”）
 # ---------------------------
 
 
@@ -173,9 +131,9 @@ class AddTaskDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super(AddTaskDialog, self).__init__(parent)
         self.current_language = parent.current_language if parent else "zh"
-        self.translations = parent.translations if parent else TRANSLATIONS
-        self.setWindowTitle(
-            self.translations[self.current_language]["add_task"])
+        self.translations = parent.translations if parent else TRANSLATIONS[
+            self.current_language]
+        self.setWindowTitle(self.translations["add_task"])
         layout = QtWidgets.QFormLayout(self)
 
         self.taskNameEdit = QtWidgets.QLineEdit()
@@ -185,20 +143,14 @@ class AddTaskDialog(QtWidgets.QDialog):
         self.deadlineEdit = QtWidgets.QDateTimeEdit(
             QtCore.QDateTime.currentDateTime())
         self.deadlineEdit.setCalendarPopup(True)
-
-        # 新增复选框，允许设置无到期时间
         self.noDeadlineCheck = QtWidgets.QCheckBox(
-            self.translations[self.current_language]["no_due"])
+            self.translations.get("no_due", "无到期时间"))
         self.noDeadlineCheck.stateChanged.connect(self.toggleDeadline)
 
-        layout.addRow(
-            self.translations[self.current_language]["task_name"], self.taskNameEdit)
-        layout.addRow(
-            self.translations[self.current_language]["task_detail"], self.taskDetailEdit)
-        layout.addRow(
-            self.translations[self.current_language]["priority"], self.prioritySpin)
-        layout.addRow(
-            self.translations[self.current_language]["deadline"], self.deadlineEdit)
+        layout.addRow(self.translations["task_name"], self.taskNameEdit)
+        layout.addRow(self.translations["task_detail"], self.taskDetailEdit)
+        layout.addRow(self.translations["priority"], self.prioritySpin)
+        layout.addRow(self.translations["deadline"], self.deadlineEdit)
         layout.addRow("", self.noDeadlineCheck)
 
         buttonBox = QtWidgets.QDialogButtonBox(
@@ -208,14 +160,12 @@ class AddTaskDialog(QtWidgets.QDialog):
         buttonBox.rejected.connect(self.reject)
 
     def toggleDeadline(self, state):
-        """当勾选无到期时间时，禁用日期时间编辑控件"""
         if state == QtCore.Qt.Checked:
             self.deadlineEdit.setEnabled(False)
         else:
             self.deadlineEdit.setEnabled(True)
 
     def getData(self):
-        # 如果勾选无到期时间，则返回 due 为 None
         due = None if self.noDeadlineCheck.isChecked(
         ) else self.deadlineEdit.dateTime().toPyDateTime()
         return {
@@ -234,9 +184,9 @@ class EditTaskDialog(QtWidgets.QDialog):
     def __init__(self, parent, task):
         super(EditTaskDialog, self).__init__(parent)
         self.current_language = parent.current_language if parent else "zh"
-        self.translations = parent.translations if parent else TRANSLATIONS
-        self.setWindowTitle(
-            self.translations[self.current_language]["edit_task"])
+        self.translations = parent.translations if parent else TRANSLATIONS[
+            self.current_language]
+        self.setWindowTitle(self.translations["edit_task"])
         layout = QtWidgets.QFormLayout(self)
 
         self.taskNameEdit = QtWidgets.QLineEdit(task.summary)
@@ -254,14 +204,10 @@ class EditTaskDialog(QtWidgets.QDialog):
             self.deadlineEdit.setDateTime(QtCore.QDateTime(task.due))
         self.deadlineEdit.setCalendarPopup(True)
 
-        layout.addRow(
-            self.translations[self.current_language]["task_name"], self.taskNameEdit)
-        layout.addRow(
-            self.translations[self.current_language]["task_detail"], self.taskDetailEdit)
-        layout.addRow(
-            self.translations[self.current_language]["priority"], self.prioritySpin)
-        layout.addRow(
-            self.translations[self.current_language]["deadline"], self.deadlineEdit)
+        layout.addRow(self.translations["task_name"], self.taskNameEdit)
+        layout.addRow(self.translations["task_detail"], self.taskDetailEdit)
+        layout.addRow(self.translations["priority"], self.prioritySpin)
+        layout.addRow(self.translations["deadline"], self.deadlineEdit)
 
         buttonBox = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
@@ -278,6 +224,118 @@ class EditTaskDialog(QtWidgets.QDialog):
         }
 
 # ---------------------------
+# 关于对话框（点击菜单直接弹出，可复制内容）
+# ---------------------------
+
+
+class AboutDialog(QtWidgets.QDialog):
+    def __init__(self, translations, parent=None):
+        super(AboutDialog, self).__init__(parent)
+        self.setWindowTitle(translations["about_title"])
+        self.resize(400, 300)
+        layout = QtWidgets.QVBoxLayout(self)
+        self.textEdit = QtWidgets.QTextEdit()
+        self.textEdit.setReadOnly(True)
+        self.textEdit.setPlainText(translations["about_message"])
+        layout.addWidget(self.textEdit)
+        buttonBox = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Close)
+        buttonBox.rejected.connect(self.reject)
+        buttonBox.accepted.connect(self.accept)
+        layout.addWidget(buttonBox)
+
+# ---------------------------
+# 设置对话框（不包含语言项，由语言菜单控制）
+# ---------------------------
+
+
+class SettingsDialog(QtWidgets.QDialog):
+    def __init__(self, conf_path, parent=None):
+        super(SettingsDialog, self).__init__(parent)
+        self.conf_path = conf_path
+        self.setWindowTitle(TRANSLATIONS["en"]["settings_title"])
+        layout = QtWidgets.QFormLayout(self)
+
+        try:
+            with open(conf_path, "r", encoding="utf-8") as f:
+                self.config = json.load(f)
+        except Exception as e:
+            self.config = {}
+
+        self.tasksPathEdit = QtWidgets.QLineEdit(
+            self.config.get("tasks_json_path", ""))
+        layout.addRow(
+            TRANSLATIONS["en"]["tasks_json_path_label"], self.tasksPathEdit)
+
+        self.iconPathEdit = QtWidgets.QLineEdit(
+            self.config.get("icon_path", ""))
+        layout.addRow(TRANSLATIONS["en"]["icon_path_label"], self.iconPathEdit)
+
+        self.urlEdit = QtWidgets.QLineEdit(self.config.get("url", ""))
+        layout.addRow(TRANSLATIONS["en"]["url_label"], self.urlEdit)
+
+        self.usernameEdit = QtWidgets.QLineEdit(
+            self.config.get("username", ""))
+        layout.addRow(TRANSLATIONS["en"]["username_label"], self.usernameEdit)
+
+        self.passwordEdit = QtWidgets.QLineEdit(
+            self.config.get("password", ""))
+        self.passwordEdit.setEchoMode(QtWidgets.QLineEdit.Password)
+        layout.addRow(TRANSLATIONS["en"]["password_label"], self.passwordEdit)
+
+        self.checkIntervalSpin = QtWidgets.QSpinBox()
+        self.checkIntervalSpin.setRange(1, 100000)
+        self.checkIntervalSpin.setValue(self.config.get("check_interval", 600))
+        layout.addRow(
+            TRANSLATIONS["en"]["check_interval_label"], self.checkIntervalSpin)
+
+        self.showDDLCheck = QtWidgets.QCheckBox()
+        self.showDDLCheck.setChecked(
+            self.config.get("show_ddl_message_box", True))
+        layout.addRow(TRANSLATIONS["en"]["show_ddl_label"], self.showDDLCheck)
+
+        self.sslVerifyCheck = QtWidgets.QCheckBox()
+        self.sslVerifyCheck.setChecked(
+            self.config.get("ssl_verify_cert", False))
+        layout.addRow(TRANSLATIONS["en"]
+                      ["ssl_verify_label"], self.sslVerifyCheck)
+
+        self.offlineModeCheck = QtWidgets.QCheckBox()
+        self.offlineModeCheck.setChecked(
+            self.config.get("offline_mode", False))
+        layout.addRow(
+            TRANSLATIONS["en"]["offline_mode_label"], self.offlineModeCheck)
+
+        buttonBox = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel)
+        buttonBox.accepted.connect(self.saveConfig)
+        buttonBox.rejected.connect(self.reject)
+        layout.addRow(buttonBox)
+
+    def saveConfig(self):
+        new_config = {
+            "tasks_json_path": self.tasksPathEdit.text(),
+            "icon_path": self.iconPathEdit.text(),
+            "url": self.urlEdit.text(),
+            "username": self.usernameEdit.text(),
+            "password": self.passwordEdit.text(),
+            "check_interval": self.checkIntervalSpin.value(),
+            "show_ddl_message_box": self.showDDLCheck.isChecked(),
+            "ssl_verify_cert": self.sslVerifyCheck.isChecked(),
+            "offline_mode": self.offlineModeCheck.isChecked()
+        }
+        try:
+            with open(self.conf_path, "w", encoding="utf-8") as f:
+                json.dump(new_config, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, TRANSLATIONS["en"]["error"],
+                                           TRANSLATIONS["en"]["failed_write_config"].format(e))
+            return
+        QtWidgets.QMessageBox.information(self, TRANSLATIONS["en"]["settings"],
+                                          TRANSLATIONS["en"]["config_saved"])
+        self.accept()
+
+# ---------------------------
 # 主窗口
 # ---------------------------
 
@@ -291,28 +349,42 @@ class MainWindow(QtWidgets.QMainWindow):
             self.path_conf = "conf.json"
 
         def load_conf(path_conf):
-            with open(path_conf, "r", encoding="utf-8") as f:
-                config = json.load(f)
-            return config
+            try:
+                with open(path_conf, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                return config
+            except Exception as e:
+                dlg = SettingsDialog(path_conf)
+                if dlg.exec_() == QtWidgets.QDialog.Accepted:
+                    try:
+                        with open(path_conf, "r", encoding="utf-8") as f:
+                            config = json.load(f)
+                        return config
+                    except Exception as e2:
+                        QtWidgets.QMessageBox.critical(None, TRANSLATIONS["en"]["error"],
+                                                       TRANSLATIONS["en"]["cannot_load_config"])
+                        sys.exit(1)
+                else:
+                    sys.exit(1)
+
         self.config = load_conf(self.path_conf)
+        self.current_language = self.config.get("language", "en")
+        self.translations = TRANSLATIONS[self.current_language]
+
         if not self.config["ssl_verify_cert"]:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.path_tasks = self.config["tasks_json_path"]
         self.path_icon = self.config["icon_path"]
-        self.current_language = self.config["language"]  # "zh" 或 "en"
-        self.translations = TRANSLATIONS
-        self.setWindowTitle(
-            self.translations[self.current_language]["window_title"])
+        self.setWindowTitle(self.translations["window_title"])
         self.resize(530, 400)
         self.initUI()
-        self.createMenuBar()  # 增加菜单栏（含语言切换）
+        self.createMenuBar()  # 含语言切换和设置
         self.createTrayIcon()
         self.setWindowIcon(QtGui.QIcon(self.path_icon))
         self.setupDeadlineChecker()
         if not self.config['offline_mode']:
             self.setupServerTasksChecker()
 
-        # 初始化 Nextcloud 客户端（在线模式下）
         self.nc_client = NextcloudTask(config=self.config)
         if not self.config['offline_mode']:
             try:
@@ -321,13 +393,12 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception as e:
                 QtWidgets.QMessageBox.critical(
                     self,
-                    self.translations[self.current_language]["connection_error"],
-                    self.translations[self.current_language]["connection_failed"].format(
-                        e)
+                    self.translations["connection_error"],
+                    self.translations["connection_failed"].format(e)
                 )
-        # 初始化任务处理器（在线或离线均可）
         self.task_handler = TaskHandler(
             self.config, self.path_tasks, self.nc_client)
+        self.tasks = self.task_handler.fetch_tasks()
 
     def initUI(self):
         centralWidget = QtWidgets.QWidget()
@@ -337,15 +408,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tableWidget = QtWidgets.QTableWidget()
         self.tableWidget.setColumnCount(5)
         self.tableWidget.setHorizontalHeaderLabels([
-            self.translations[self.current_language]["completed"],
-            self.translations[self.current_language]["task_name"].replace(
-                ":", ""),
-            self.translations[self.current_language]["priority"].replace(
-                ":", ""),
-            self.translations[self.current_language]["deadline"].replace(
-                ":", ""),
-            self.translations[self.current_language]["task_detail"].replace(
-                ":", "")
+            self.translations["completed"],
+            self.translations["task_name"].replace(":", ""),
+            self.translations["priority"].replace(":", ""),
+            self.translations["deadline"].replace(":", ""),
+            self.translations["task_detail"].replace(":", "")
         ])
         self.tableWidget.setEditTriggers(
             QtWidgets.QAbstractItemView.NoEditTriggers)
@@ -353,15 +420,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         btnLayout = QtWidgets.QHBoxLayout()
         self.fetchButton = QtWidgets.QPushButton(
-            self.translations[self.current_language]["fetch_task"])
-        self.addButton = QtWidgets.QPushButton(
-            self.translations[self.current_language]["add_task"])
-        self.editButton = QtWidgets.QPushButton(
-            self.translations[self.current_language]["edit_task"])
+            self.translations["fetch_task"])
+        self.addButton = QtWidgets.QPushButton(self.translations["add_task"])
+        self.editButton = QtWidgets.QPushButton(self.translations["edit_task"])
         self.deleteButton = QtWidgets.QPushButton(
-            self.translations[self.current_language]["delete_task"])
-        self.syncButton = QtWidgets.QPushButton(
-            self.translations[self.current_language]["sync_task"])
+            self.translations["delete_task"])
+        self.syncButton = QtWidgets.QPushButton(self.translations["sync_task"])
 
         btnLayout.addWidget(self.fetchButton)
         btnLayout.addWidget(self.addButton)
@@ -378,87 +442,83 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def createMenuBar(self):
         menubar = self.menuBar()
-        # 增加语言菜单
-        self.languageMenu = menubar.addMenu(
-            self.translations[self.current_language]["language_menu"])
+        self.languageMenu = menubar.addMenu(self.translations["language_menu"])
         self.actionChinese = self.languageMenu.addAction("中文")
         self.actionEnglish = self.languageMenu.addAction("English")
         self.actionChinese.triggered.connect(lambda: self.setLanguage("zh"))
         self.actionEnglish.triggered.connect(lambda: self.setLanguage("en"))
 
-        # 在语言菜单旁边增加一个“关于”菜单
-        self.aboutMenu = menubar.addMenu(
-            self.translations[self.current_language]["about_menu"])
-        self.aboutAction = self.aboutMenu.addAction(
-            self.translations[self.current_language]["about_menu"])
+        self.settingsAction = menubar.addAction(
+            self.translations.get("settings", "设置"))
+        self.settingsAction.triggered.connect(self.openSettingsDialog)
+
+        # 直接添加“关于”菜单项（不再使用下拉菜单）
+        self.aboutAction = menubar.addAction(self.translations["about_menu"])
         self.aboutAction.triggered.connect(self.showAbout)
 
+    def openSettingsDialog(self):
+        dlg = SettingsDialog(self.path_conf, self)
+        if dlg.exec_() == QtWidgets.QDialog.Accepted:
+            try:
+                with open(self.path_conf, "r", encoding="utf-8") as f:
+                    self.config = json.load(f)
+                QtWidgets.QMessageBox.information(self, self.translations["settings"],
+                                                  self.translations["config_updated"])
+            except Exception as e:
+                QtWidgets.QMessageBox.warning(self, self.translations["error"],
+                                              self.translations["reload_config_failed"].format(e))
+
     def setLanguage(self, lang):
-        if lang not in self.translations:
+        if lang not in TRANSLATIONS:
+            return
+        if lang == self.current_language:
             return
         self.current_language = lang
+        self.config["language"] = lang
+        self.translations = TRANSLATIONS[lang]
+        try:
+            with open(self.path_conf, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, self.translations["error"],
+                                          self.translations["failed_write_config"].format(e))
         self.updateTranslations()
 
     def updateTranslations(self):
-        self.setWindowTitle(
-            self.translations[self.current_language]["window_title"])
+        self.setWindowTitle(self.translations["window_title"])
         self.tableWidget.setHorizontalHeaderLabels([
-            self.translations[self.current_language]["completed"],
-            self.translations[self.current_language]["task_name"].replace(
-                ":", ""),
-            self.translations[self.current_language]["priority"].replace(
-                ":", ""),
-            self.translations[self.current_language]["deadline"].replace(
-                ":", ""),
-            self.translations[self.current_language]["task_detail"].replace(
-                ":", "")
+            self.translations["completed"],
+            self.translations["task_name"].replace(":", ""),
+            self.translations["priority"].replace(":", ""),
+            self.translations["deadline"].replace(":", ""),
+            self.translations["task_detail"].replace(":", "")
         ])
-        self.fetchButton.setText(
-            self.translations[self.current_language]["fetch_task"])
-        self.addButton.setText(
-            self.translations[self.current_language]["add_task"])
-        self.editButton.setText(
-            self.translations[self.current_language]["edit_task"])
-        self.deleteButton.setText(
-            self.translations[self.current_language]["delete_task"])
-        self.syncButton.setText(
-            self.translations[self.current_language]["sync_task"])
-        self.trayIcon.setToolTip(
-            self.translations[self.current_language]["tray_tooltip"])
-        # 更新托盘菜单
+        self.fetchButton.setText(self.translations["fetch_task"])
+        self.addButton.setText(self.translations["add_task"])
+        self.editButton.setText(self.translations["edit_task"])
+        self.deleteButton.setText(self.translations["delete_task"])
+        self.syncButton.setText(self.translations["sync_task"])
+        self.trayIcon.setToolTip(self.translations["tray_tooltip"])
         trayMenu = self.trayIcon.contextMenu()
-        trayMenu.actions()[0].setText(
-            self.translations[self.current_language]["restore"])
-        trayMenu.actions()[1].setText(
-            self.translations[self.current_language]["quit"])
-        # 更新语言菜单显示
-        self.languageMenu.setTitle(
-            self.translations[self.current_language]["language_menu"])
-        # 更新关于菜单显示
-        self.aboutMenu.setTitle(
-            self.translations[self.current_language]["about_menu"])
-        self.aboutAction.setText(
-            self.translations[self.current_language]["about_menu"])
+        trayMenu.actions()[0].setText(self.translations["restore"])
+        trayMenu.actions()[1].setText(self.translations["quit"])
+        self.languageMenu.setTitle(self.translations["language_menu"])
+        self.aboutAction.setText(self.translations["about_menu"])
+        self.settingsAction.setText(self.translations.get("settings", "设置"))
 
     def showAbout(self):
-        QtWidgets.QMessageBox.information(
-            self,
-            self.translations[self.current_language]["about_title"],
-            self.translations[self.current_language]["about_message"]
-        )
+        aboutDlg = AboutDialog(self.translations, self)
+        aboutDlg.exec_()
 
     def createTrayIcon(self):
         self.trayIcon = QtWidgets.QSystemTrayIcon(self)
         icon = QtGui.QIcon(self.path_icon)
         self.trayIcon.setIcon(icon)
-        self.trayIcon.setToolTip(
-            self.translations[self.current_language]["tray_tooltip"])
+        self.trayIcon.setToolTip(self.translations["tray_tooltip"])
         trayMenu = QtWidgets.QMenu(self)
-        restoreAction = trayMenu.addAction(
-            self.translations[self.current_language]["restore"])
+        restoreAction = trayMenu.addAction(self.translations["restore"])
         restoreAction.triggered.connect(self.showNormal)
-        quitAction = trayMenu.addAction(
-            self.translations[self.current_language]["quit"])
+        quitAction = trayMenu.addAction(self.translations["quit"])
         quitAction.triggered.connect(QtWidgets.QApplication.quit)
         self.trayIcon.setContextMenu(trayMenu)
         self.trayIcon.show()
@@ -468,7 +528,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.hide()
 
     def fetchTasks(self):
-        """使用 TaskHandler 获取任务，并刷新任务表"""
         self.tasks = self.task_handler.fetch_tasks()
         self.refreshTaskTable()
 
@@ -494,10 +553,11 @@ class MainWindow(QtWidgets.QMainWindow):
             if task.due and isinstance(task.due, datetime.datetime):
                 deadline_str = task.due.strftime('%Y-%m-%d %H:%M')
             else:
-                deadline_str = "无"
+                deadline_str = self.translations["no_due"]
             self.tableWidget.setItem(
                 rowPosition, 3, QtWidgets.QTableWidgetItem(deadline_str))
-            detail_str = task.description if task.description else "无"
+            detail_str = task.description if task.description else (
+                "无" if self.current_language == "zh" else "None")
             self.tableWidget.setItem(
                 rowPosition, 4, QtWidgets.QTableWidgetItem(detail_str))
 
@@ -518,12 +578,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             data = dialog.getData()
             self.task_handler.add_task(data)
-            # 离线或在线均认为任务添加成功（在线时错误将在 TaskHandler 内处理）
             QtWidgets.QMessageBox.information(
                 self,
-                self.translations[self.current_language]["add_task"],
-                self.translations[self.current_language].get(
-                    "add_success", "任务添加成功")
+                self.translations["add_task"],
+                self.translations.get("add_success", "任务添加成功")
             )
             self.fetchTasks()
 
@@ -532,8 +590,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if not selectedItems:
             QtWidgets.QMessageBox.warning(
                 self,
-                self.translations[self.current_language]["edit_task"],
-                self.translations[self.current_language]["select_task_edit"]
+                self.translations["edit_task"],
+                self.translations["select_task_edit"]
             )
             return
         row = selectedItems[0].row()
@@ -543,9 +601,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if not task_obj:
                 QtWidgets.QMessageBox.warning(
                     self,
-                    self.translations[self.current_language]["edit_task"],
-                    self.translations[self.current_language].get(
-                        "no_task_found", "未找到该任务")
+                    self.translations["edit_task"],
+                    self.translations.get("no_task_found", "未找到该任务")
                 )
                 return
             dialog = EditTaskDialog(self, task_obj)
@@ -554,13 +611,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.task_handler.update_task(uid, data)
                 QtWidgets.QMessageBox.information(
                     self,
-                    self.translations[self.current_language]["edit_task"],
-                    self.translations[self.current_language].get(
-                        "edit_success", "任务修改成功")
+                    self.translations["edit_task"],
+                    self.translations.get("edit_success", "任务修改成功")
                 )
                 self.fetchTasks()
         else:
-            # 离线模式下可能无 uid，通过任务名称匹配
             task_name = self.tableWidget.item(row, 1).text()
             task_obj = next(
                 (t for t in self.tasks if t.summary == task_name), None)
@@ -571,17 +626,15 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.task_handler.update_task(task_obj.uid, data)
                     QtWidgets.QMessageBox.information(
                         self,
-                        self.translations[self.current_language]["edit_task"],
-                        self.translations[self.current_language].get(
-                            "local_edit_success", "本地任务修改成功")
+                        self.translations["edit_task"],
+                        self.translations.get("local_edit_success", "本地任务修改成功")
                     )
                     self.fetchTasks()
             else:
                 QtWidgets.QMessageBox.warning(
                     self,
-                    self.translations[self.current_language]["edit_task"],
-                    self.translations[self.current_language].get(
-                        "no_local_task", "未找到本地任务")
+                    self.translations["edit_task"],
+                    self.translations.get("no_local_task", "未找到本地任务")
                 )
 
     def deleteTask(self):
@@ -589,8 +642,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if not selectedItems:
             QtWidgets.QMessageBox.warning(
                 self,
-                self.translations[self.current_language]["delete_task"],
-                self.translations[self.current_language]["select_task_edit"]
+                self.translations["delete_task"],
+                self.translations["select_task_edit"]
             )
             return
         row = selectedItems[0].row()
@@ -599,21 +652,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.task_handler.delete_task(uid, summary)
         QtWidgets.QMessageBox.information(
             self,
-            self.translations[self.current_language]["delete_task"],
-            self.translations[self.current_language].get(
-                "delete_success", "任务删除成功")
+            self.translations["delete_task"],
+            self.translations.get("delete_success", "任务删除成功")
         )
         self.fetchTasks()
 
     def checkLocalServerTasks(self):
-        """
-        同步前比对本地与服务器数据，仅在在线模式下使用
-        """
         if self.config['offline_mode']:
             QtWidgets.QMessageBox.information(
                 self,
-                self.translations[self.current_language]["sync_task"],
-                self.translations[self.current_language]["no_offline_mode_sync"],
+                self.translations["sync_task"],
+                self.translations["no_offline_mode_sync"]
             )
             return
 
@@ -651,18 +700,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tasks = [Todo(t.data) for t in todos]
             server_tasks = [task.to_dict() for task in self.tasks]
             local_data = load_local_tasks(self.path_tasks)
-            print(local_data)
-            print(server_tasks)
             if not data_is_same(local_data, server_tasks):
                 msgBox = QtWidgets.QMessageBox(self)
-                msgBox.setWindowTitle(
-                    self.translations[self.current_language]["json_mismatch_title"])
-                msgBox.setText(
-                    self.translations[self.current_language]["json_mismatch_message"])
+                msgBox.setWindowTitle(self.translations["json_mismatch_title"])
+                msgBox.setText(self.translations["json_mismatch_message"])
                 btnLocal = msgBox.addButton(
-                    self.translations[self.current_language]["use_local"], QtWidgets.QMessageBox.AcceptRole)
+                    self.translations["use_local"], QtWidgets.QMessageBox.AcceptRole)
                 btnServer = msgBox.addButton(
-                    self.translations[self.current_language]["use_server"], QtWidgets.QMessageBox.RejectRole)
+                    self.translations["use_server"], QtWidgets.QMessageBox.RejectRole)
                 msgBox.exec_()
                 if msgBox.clickedButton() == btnLocal:
                     final_tasks = local_data
@@ -678,21 +723,17 @@ class MainWindow(QtWidgets.QMainWindow):
             print(e)
             QtWidgets.QMessageBox.critical(
                 self,
-                self.translations[self.current_language]["fetch_error_title"],
-                self.translations[self.current_language]["fetch_error_message"].format(
-                    e)
+                self.translations["fetch_error_title"],
+                self.translations["fetch_error_message"].format(e)
             )
         self.refreshTaskTable()
 
     def syncServerTasks(self, check=True):
-        """
-        将本地 JSON 数据同步到服务器，仅在在线模式下使用
-        """
         if self.config['offline_mode']:
             QtWidgets.QMessageBox.information(
                 self,
-                self.translations[self.current_language]["sync_task"],
-                self.translations[self.current_language]["no_offline_mode_sync"],
+                self.translations["sync_task"],
+                self.translations["no_offline_mode_sync"]
             )
             return
 
@@ -703,8 +744,8 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             QtWidgets.QMessageBox.warning(
                 self,
-                self.translations[self.current_language]["sync_task"],
-                self.translations[self.current_language]["sync_warning"]
+                self.translations["sync_task"],
+                self.translations["sync_warning"]
             )
             return
 
@@ -712,33 +753,27 @@ class MainWindow(QtWidgets.QMainWindow):
         for task in local_tasks:
             try:
                 if not task.get("uid"):
-                    self.nc_client.addTodo(
-                        task["summary"],
-                        priority=task["priority"],
-                        percent_complete=task.get('percent_complete', 0)
-                    )
+                    self.nc_client.addTodo(task["summary"],
+                                           priority=task["priority"],
+                                           percent_complete=task.get('percent_complete', 0))
                     self.nc_client.updateTodos()
                     uid = self.nc_client.getUidbySummary(task["summary"])
-                    self.nc_client.updateTodo(
-                        uid,
-                        note=task["description"],
-                        due=task["due"],
-                        priority=task["priority"],
-                        percent_complete=task.get('percent_complete', 0)
-                    )
+                    self.nc_client.updateTodo(uid,
+                                              note=task["description"],
+                                              due=task["due"],
+                                              priority=task["priority"],
+                                              percent_complete=task.get('percent_complete', 0))
                     task["uid"] = uid
                 else:
-                    self.nc_client.updateTodo(
-                        task["uid"],
-                        summary=task["summary"],
-                        note=task.get("description", ""),
-                        due=task["due"],
-                        priority=task["priority"],
-                        percent_complete=task.get('percent_complete', 0)
-                    )
+                    self.nc_client.updateTodo(task["uid"],
+                                              summary=task["summary"],
+                                              note=task.get("description", ""),
+                                              due=task["due"],
+                                              priority=task["priority"],
+                                              percent_complete=task.get('percent_complete', 0))
             except Exception as ex:
                 print(
-                    f"{task['summary']} \n{self.translations[self.current_language]['sync_error']}: {ex}")
+                    f"{task['summary']} \n{self.translations['sync_error']}: {ex}")
                 task["sync_error"] = str(ex)
 
         try:
@@ -747,13 +782,12 @@ class MainWindow(QtWidgets.QMainWindow):
             server_tasks = [Todo(t.data).to_dict() for t in todos]
             save_local_tasks(server_tasks, self.path_tasks)
         except Exception as ex:
-            print(
-                f"{self.translations[self.current_language]['sync_error']}: {ex}")
+            print(f"{self.translations['sync_error']}: {ex}")
 
         QtWidgets.QMessageBox.information(
             self,
-            self.translations[self.current_language]["sync_task"],
-            self.translations[self.current_language]["sync_success"]
+            self.translations["sync_task"],
+            self.translations["sync_success"]
         )
         self.fetchTasks()
 
@@ -766,8 +800,8 @@ class MainWindow(QtWidgets.QMainWindow):
         now = datetime.datetime.now()
         for task in self.tasks:
             if task.due and now > task.due - datetime.timedelta(minutes=10) and now < task.due:
-                title = self.translations[self.current_language]["tray_deadline_title"]
-                msg_template = self.translations[self.current_language]["tray_deadline_message"]
+                title = self.translations["tray_deadline_title"]
+                msg_template = self.translations["tray_deadline_message"]
                 msg = msg_template.format(summary=task.summary)
                 self.trayIcon.showMessage(
                     title, msg, QtWidgets.QSystemTrayIcon.Warning, 5000)
