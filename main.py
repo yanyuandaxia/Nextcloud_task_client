@@ -204,10 +204,11 @@ class EditTaskDialog(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
-        if len(sys.argv)>1:
+        if len(sys.argv) > 1:
             self.path_conf = sys.argv[1]
         else:
             self.path_conf = "conf.json"
+
         def load_conf(path_conf):
             with open(path_conf, "r", encoding="utf-8") as f:
                 config = json.load(f)
@@ -225,6 +226,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.createTrayIcon()
         self.setWindowIcon(QtGui.QIcon(self.path_icon))
         self.setupDeadlineChecker()
+        self.setupServerTasksChecker()
 
         # 从文件加载本地任务列表（JSON 格式）
         self.local_tasks = load_local_tasks(self.path_tasks)
@@ -828,10 +830,18 @@ class MainWindow(QtWidgets.QMainWindow):
                     title, msg, QtWidgets.QSystemTrayIcon.Warning, 5000)
                 if self.config['show_ddl_message_box']:
                     QtWidgets.QMessageBox.warning(
-                            self,
-                            title,
-                            f"{msg}"
-                        )
+                        self,
+                        title,
+                        f"{msg}"
+                    )
+
+    def setupServerTasksChecker(self):
+        self.serverTimer = QtCore.QTimer(self)
+        self.serverTimer.timeout.connect(self.checkServerTasks)
+        self.serverTimer.start(self.config["check_interval"] * 1000)
+
+    def checkServerTasks(self):
+        self.fetchTasks()
 
 
 def main():
