@@ -1,8 +1,8 @@
-# Nextcloud Task 同步客户端
+# Nextcloud Tasks 同步客户端
 
 ## 简介
 
-**Nextcloud Task 同步客户端** 是一款基于 PyQt5 开发的桌面应用程序，旨在帮助用户在 Windows 和 Linux 平台上管理和同步 Nextcloud 上的任务。其中nextcloudtasks.py使用了[nextcloud-tasks](https://github.com/Sinkmanu/nextcloud-tasks)项目。图标来自 [iconfinder.com](https://www.iconfinder.com/search?q=todo&price=free)。该客户端具有以下特点：
+**Nextcloud Tasks 同步客户端** 是一款基于 PyQt5 开发的桌面应用程序，旨在帮助用户在 Windows 和 Linux 平台上管理和同步 Nextcloud 上的任务。其中nextcloudtasks.py使用了[nextcloud-tasks](https://github.com/Sinkmanu/nextcloud-tasks)项目。图标来自 [iconfinder.com](https://www.iconfinder.com/search?q=todo&price=free)。该客户端具有以下特点：
 
 * **任务管理** ：支持添加、编辑、删除任务，并可将任务同步至 Nextcloud 服务器。
 * **离线模式** ：当网络异常或处于离线模式时，仍能通过本地 JSON 文件保存任务数据，待网络恢复后进行同步。
