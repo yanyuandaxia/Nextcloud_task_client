@@ -1,8 +1,8 @@
-# Nextcloud Task Synchronization Client
+# Nextcloud Tasks Synchronization Client
 
 ## Introduction
 
-The **Nextcloud Task Synchronization Client** is a desktop application developed with PyQt5, designed to help users manage and synchronize tasks on Nextcloud across Windows and Linux platforms. The script *nextcloudtasks.py* utilizes the **[nextcloud-tasks](https://github.com/Sinkmanu/nextcloud-tasks)** project. The icon is from [iconfinder.com](https://www.iconfinder.com/search?q=todo&price=free). This client features:
+The **Nextcloud Tasks Synchronization Client** is a desktop application developed with PyQt5, designed to help users manage and synchronize tasks on Nextcloud across Windows and Linux platforms. The script *nextcloudtasks.py* utilizes the **[nextcloud-tasks](https://github.com/Sinkmanu/nextcloud-tasks)** project. The icon is from [iconfinder.com](https://www.iconfinder.com/search?q=todo&price=free). This client features:
 
 * **Task Management**: Supports adding, editing, and deleting tasks, with the ability to synchronize them to the Nextcloud server.
 * **Offline Mode**: In the event of network issues or when in offline mode, task data is saved locally in a JSON file and synchronized once the network is restored.
