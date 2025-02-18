@@ -39,8 +39,10 @@ class EditTaskDialog(QtWidgets.QDialog):
             index = 1
         self.priorityCombo.setCurrentIndex(index)
 
+        # 使用 QDateTimeEdit 同时支持日期和时间的编辑
         self.deadlineEdit = QtWidgets.QDateTimeEdit(QtCore.QDateTime.currentDateTime())
         self.deadlineEdit.setCalendarPopup(True)
+        self.deadlineEdit.setDisplayFormat("yyyy-MM-dd HH:mm")
         if task.due:
             self.deadlineEdit.setDateTime(QtCore.QDateTime(task.due))
             initial_no_due = False

@@ -23,8 +23,12 @@ class AddTaskDialog(QtWidgets.QDialog):
         for text, value in self.priority_options:
             self.priorityCombo.addItem(text, value)
 
+        # 使用 QDateTimeEdit 同时支持日期和时间的编辑
         self.deadlineEdit = QtWidgets.QDateTimeEdit(QtCore.QDateTime.currentDateTime())
         self.deadlineEdit.setCalendarPopup(True)
+        # 设置显示格式，使得日期和时间都可编辑
+        self.deadlineEdit.setDisplayFormat("yyyy-MM-dd HH:mm")
+
         self.noDeadlineCheck = QtWidgets.QCheckBox(self.translations.get("no_due", "无到期时间"))
         self.noDeadlineCheck.stateChanged.connect(self.toggleDeadline)
 
