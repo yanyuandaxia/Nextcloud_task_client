@@ -66,7 +66,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     sys.exit(1)
 
         self.config = load_conf(self.path_conf)
-        self.current_language = self.config.get("language", "en")
+        if "language" not in self.config.keys():
+            self.config["language"] = "en"
+        self.current_language = self.config.get("language")
         self.translations = TRANSLATIONS[self.current_language]
 
         if not self.config["ssl_verify_cert"]:
@@ -566,7 +568,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def checkDeadlines(self):
         now = datetime.datetime.now()
         for task in self.tasks:
-            if task.due and now > task.due - datetime.timedelta(minutes=10) and now < task.due:
+            if task.due and (now > (task.due - datetime.timedelta(minutes=10))) and (now < task.due):
                 title = self.translations["tray_deadline_title"]
                 msg_template = self.translations["tray_deadline_message"]
                 msg = msg_template.format(summary=task.summary)

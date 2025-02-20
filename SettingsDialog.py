@@ -96,4 +96,4 @@ class SettingsDialog(QtWidgets.QDialog):
             return
         QtWidgets.QMessageBox.information(self, TRANSLATIONS["en"]["settings"],
                                           TRANSLATIONS["en"]["config_saved"])
-        self.accept()
+        # self.accept()
