@@ -85,7 +85,8 @@ class SettingsDialog(QtWidgets.QDialog):
             "check_interval": self.checkIntervalSpin.value(),
             "show_ddl_message_box": self.showDDLCheck.isChecked(),
             "ssl_verify_cert": self.sslVerifyCheck.isChecked(),
-            "offline_mode": self.offlineModeCheck.isChecked()
+            "offline_mode": self.offlineModeCheck.isChecked(),
+            "language": "zh" if self.config.get("language", "en") == "zh" else "en"
         }
         try:
             with open(self.conf_path, "w", encoding="utf-8") as f:
