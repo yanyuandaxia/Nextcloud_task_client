@@ -50,9 +50,10 @@ class EditTaskDialog(QtWidgets.QDialog):
             initial_no_due = True
             self.deadlineEdit.setEnabled(False)
             
+        # 创建无到期时间复选框
         self.noDeadlineCheck = QtWidgets.QCheckBox(self.translations.get("no_due", "无到期时间"))
         self.noDeadlineCheck.setChecked(initial_no_due)
-        self.noDeadlineCheck.stateChanged.connect(self.toggleDeadline)
+        self.noDeadlineCheck.toggled.connect(self.toggleDeadline)
         
         layout.addRow(self.translations["task_name"], self.taskNameEdit)
         layout.addRow(self.translations["task_detail"], self.taskDetailEdit)
@@ -65,11 +66,8 @@ class EditTaskDialog(QtWidgets.QDialog):
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
         
-    def toggleDeadline(self, state):
-        if state == QtCore.Qt.Checked:
-            self.deadlineEdit.setEnabled(False)
-        else:
-            self.deadlineEdit.setEnabled(True)
+    def toggleDeadline(self, checked):
+        self.deadlineEdit.setEnabled(not checked)
             
     def getData(self):
         due = None if self.noDeadlineCheck.isChecked() else self.deadlineEdit.dateTime().toPyDateTime()

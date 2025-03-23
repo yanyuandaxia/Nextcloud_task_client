@@ -86,8 +86,10 @@ class TaskHandler:
             except Exception as e:
                 pass
         tasks = load_local_tasks(self.tasks_path)
-        tasks = [t for t in tasks if t.get(
-            "uid") != uid and t.get("summary") != summary]
+        if uid:
+            tasks = [t for t in tasks if t.get("uid") != uid]
+        else:
+            tasks = [t for t in tasks if t.get("summary") != summary]
         save_local_tasks(tasks, self.tasks_path)
 
     def update_status(self, uid, summary, new_status, percent_complete):

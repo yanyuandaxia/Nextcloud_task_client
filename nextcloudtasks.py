@@ -187,6 +187,8 @@ class NextcloudTask:
                 '%Y%m%dT%H%M%S')
         if due is not None:
             todo.icalendar_component['DUE'] = due.strftime('%Y%m%dT%H%M%S')
+        elif 'DUE' in todo.icalendar_component:
+            del todo.icalendar_component['DUE']
         if priority is not None:
             todo.icalendar_component['PRIORITY'] = priority
         if percent_complete is not None:
