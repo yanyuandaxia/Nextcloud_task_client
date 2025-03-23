@@ -174,3 +174,4 @@ cython_debug/
 conf.json
 tasks.json
 *.exe
+nohup.out
