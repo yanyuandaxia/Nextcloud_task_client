@@ -10,7 +10,18 @@ class EditTaskDialog(QtWidgets.QDialog):
         layout = QtWidgets.QFormLayout(self)
 
         self.taskNameEdit = QtWidgets.QLineEdit(task.summary)
-        self.taskDetailEdit = QtWidgets.QTextEdit(task.description if task.description else "")
+        # 保留原始 description，用于保存时去除展示用的周期信息
+        self._raw_description = task.description if task.description else ""
+        self.taskDetailEdit = QtWidgets.QTextEdit()
+
+        # 编辑框只显示原始描述（剥离任何已有的 Recurrence Info 块）
+        raw_text = self._raw_description or ""
+        # 如果原始描述中包含 Recurrence Info 块，去除之
+        if 'Recurrence Info' in raw_text:
+            raw_text = raw_text.split('Recurrence Info', 1)[0].rstrip()
+        if '周期信息' in raw_text:
+            raw_text = raw_text.split('周期信息', 1)[0].rstrip()
+        self.taskDetailEdit.setPlainText(raw_text)
 
         # 使用 QComboBox 替代 QSpinBox 进行优先级选择
         self.priorityCombo = QtWidgets.QComboBox()
@@ -146,9 +157,27 @@ class EditTaskDialog(QtWidgets.QDialog):
             if total_minutes == 0:
                 total_minutes = None
         
+        # For recurring tasks, set description to only the Recurrence Info block
+        if self.recurringCheck.isChecked() and total_minutes is not None:
+            lines = ["Recurrence Info"]
+            if due:
+                try:
+                    lines.append(f"Deadline: {due.strftime('%Y-%m-%d %H:%M')}")
+                except Exception:
+                    lines.append(f"Deadline: {due}")
+            lines.append(f"Recurrence: {int(total_minutes)} Mins")
+            description = "\n".join(lines)
+        else:
+            # 非周期任务或未启用周期，保留用户填写的正文，并剔除历史展示块（兼容中英文旧标记）
+            text = self.taskDetailEdit.toPlainText()
+            for marker in ("\n\n--- Recurrence Info ---\n", "\n\n--- 周期信息 ---\n", "\n\n--- Recurrence Info ---"):
+                if marker in text:
+                    text = text.split(marker, 1)[0].rstrip()
+            description = text
+
         return {
             "summary": self.taskNameEdit.text(),
-            "description": self.taskDetailEdit.toPlainText(),
+            "description": description,
             "priority": priority,
             "due": due,
             "is_recurring": self.recurringCheck.isChecked() and total_minutes is not None,

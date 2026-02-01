@@ -23,7 +23,6 @@ a = Analysis(
     binaries=[],
     datas=[
         ('icon.png', '.'),
-        ('conf.json', '.'),
     ],
     hiddenimports=[
         'PyQt5',
