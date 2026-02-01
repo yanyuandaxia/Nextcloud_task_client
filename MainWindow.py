@@ -1,7 +1,7 @@
 from translations import TRANSLATIONS
-from nextcloudtasks import NextcloudTask, Todo
+from nextcloudtasks import NextcloudTask, Todo, parse_rrule_to_minutes, minutes_to_rrule
 from local_tasks import load_local_tasks, save_local_tasks
-from TaskHandler import TaskHandler, pack_meta_into_note, unpack_meta_from_note
+from TaskHandler import TaskHandler
 from SettingsDialog import SettingsDialog
 from EditTaskDialog import EditTaskDialog
 from AddTaskDialog import AddTaskDialog
@@ -259,10 +259,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tableWidget.setItem(rowPosition, 3, item_deadline)
 
             # 第4列：任务详情（不启用排序，直接使用普通项）
-            try:
-                detail_clean, _meta = unpack_meta_from_note(task.description if task.description else "")
-            except Exception:
-                detail_clean = task.description if task.description else ""
+            detail_clean = task.description if task.description else ""
             detail_str = detail_clean if detail_clean else ("无" if self.current_language == "zh" else "None")
             item_detail = QtWidgets.QTableWidgetItem(detail_str)
             self.tableWidget.setItem(rowPosition, 4, item_detail)
@@ -270,15 +267,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _get_display_due(self, task):
         """计算任务的显示截止时间。对于周期任务，返回下一个未到期的截止时间。"""
-        is_recurring = getattr(task, 'is_recurring', False)
-        # 兼容旧版：优先使用 recurrence_interval_minutes，否则从 recurrence_interval_days 转换
-        interval_minutes = getattr(task, 'recurrence_interval_minutes', None)
-        if interval_minutes is None:
-            interval_days = getattr(task, 'recurrence_interval_days', None)
-            if interval_days:
-                interval_minutes = interval_days * 24 * 60
+        rrule_val = getattr(task, 'rrule', None) or (task.get('rrule') if isinstance(task, dict) else None)
+
+        interval_minutes = 0
+        if rrule_val:
+            interval_minutes = parse_rrule_to_minutes(rrule_val) or 0
         
-        if not is_recurring or not interval_minutes or not task.due:
+        if not rrule_val or not interval_minutes or not task.due:
             return task.due
         
         now = datetime.datetime.now()
@@ -505,8 +500,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
             def normalize_task_for_compare(t):
                 tt = t.copy()
-                # 移除本地特有的周期任务字段以及可能的本地错误字段
-                for k in ('is_recurring', 'recurrence_interval_minutes', 'recurrence_interval_days', 'sync_error'):
+                # 移除本地特有的字段
+                for k in ('sync_error',):
                     tt.pop(k, None)
                 # 统一截止时间格式为 ISO 字符串或 None
                 nd = normalize_due_datetime(tt.get('due', ''))
@@ -535,6 +530,7 @@ class MainWindow(QtWidgets.QMainWindow):
             todos = self.nc_client.todos
             self.tasks = [Todo(t.data) for t in todos]
             server_tasks = [task.to_dict() for task in self.tasks]
+
             local_data = load_local_tasks(self.path_tasks)
             if not data_is_same(local_data, server_tasks):
                 msgBox = QtWidgets.QMessageBox(self)
@@ -549,42 +545,12 @@ class MainWindow(QtWidgets.QMainWindow):
                     final_tasks = local_data
                     self.syncServerTasks(check=False)
                 elif msgBox.clickedButton() == btnServer:
-                    # 保留本地的周期任务设置
-                    local_recurring_map = {}
-                    for lt in local_data:
-                        if lt.get("uid"):
-                            # 兼容旧版
-                            interval_minutes = lt.get("recurrence_interval_minutes")
-                            if interval_minutes is None and lt.get("recurrence_interval_days"):
-                                interval_minutes = lt.get("recurrence_interval_days") * 24 * 60
-                            local_recurring_map[lt["uid"]] = {
-                                "is_recurring": lt.get("is_recurring", False),
-                                "recurrence_interval_minutes": interval_minutes
-                            }
-                    for t in server_tasks:
-                        if t.get("uid") in local_recurring_map:
-                            t["is_recurring"] = local_recurring_map[t["uid"]]["is_recurring"]
-                            t["recurrence_interval_minutes"] = local_recurring_map[t["uid"]]["recurrence_interval_minutes"]
+                    # 直接使用服务器数据，包括 rrule
                     final_tasks = server_tasks
                 else:
                     raise Exception("msgBox button error")
             else:
-                # 保留本地的周期任务设置
-                local_recurring_map = {}
-                for lt in local_data:
-                    if lt.get("uid"):
-                        # 兼容旧版
-                        interval_minutes = lt.get("recurrence_interval_minutes")
-                        if interval_minutes is None and lt.get("recurrence_interval_days"):
-                            interval_minutes = lt.get("recurrence_interval_days") * 24 * 60
-                        local_recurring_map[lt["uid"]] = {
-                            "is_recurring": lt.get("is_recurring", False),
-                            "recurrence_interval_minutes": interval_minutes
-                        }
-                for t in server_tasks:
-                    if t.get("uid") in local_recurring_map:
-                        t["is_recurring"] = local_recurring_map[t["uid"]]["is_recurring"]
-                        t["recurrence_interval_minutes"] = local_recurring_map[t["uid"]]["recurrence_interval_minutes"]
+                # 直接使用服务器数据
                 final_tasks = server_tasks
             save_local_tasks(final_tasks, self.path_tasks)
         except Exception as e:
@@ -626,7 +592,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                            percent_complete=task.get('percent_complete', 0))
                     self.nc_client.updateTodos()
                     uid = self.nc_client.getUidbySummary(task["summary"])
-                    note = pack_meta_into_note(task)
+                    note = task.get('description', '')
                     # ensure due is datetime when possible
                     due_value = task.get('due')
                     try:
@@ -634,26 +600,39 @@ class MainWindow(QtWidgets.QMainWindow):
                             due_value = datetime.datetime.strptime(due_value, "%Y-%m-%dT%H:%M:%S")
                     except Exception:
                         pass
+                    
+                    rrule_val = task.get('rrule')
+                    if not rrule_val:
+                          rrule_val = ""
+
                     self.nc_client.updateTodo(uid,
                                               note=note,
                                               due=due_value,
                                               priority=task["priority"],
-                                              percent_complete=task.get('percent_complete', 0))
+                                              percent_complete=task.get('percent_complete', 0),
+                                              rrule=rrule_val)
                     task["uid"] = uid
                 else:
-                    note = pack_meta_into_note(task)
+                    note = task.get('description', '')
                     due_value = task.get('due')
                     try:
                         if isinstance(due_value, str):
                             due_value = datetime.datetime.strptime(due_value, "%Y-%m-%dT%H:%M:%S")
                     except Exception:
                         pass
+                        
+                    # Push rrule if available locally
+                    rrule_val = task.get('rrule')
+                    if not rrule_val:
+                          rrule_val = ""
+
                     self.nc_client.updateTodo(task["uid"],
                                               summary=task["summary"],
                                               note=note,
                                               due=due_value,
                                               priority=task["priority"],
-                                              percent_complete=task.get('percent_complete', 0))
+                                              percent_complete=task.get('percent_complete', 0),
+                                              rrule=rrule_val)
             except Exception as ex:
                 print(
                     f"{task['summary']} \n{self.translations['sync_error']}: {ex}")
@@ -663,69 +642,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.nc_client.updateTodos()
             todos = self.nc_client.todos
             server_tasks = [Todo(t.data).to_dict() for t in todos]
+
             # 解析服务器上的 description，检查其中的 Recurrence Info 元数据是否与本地一致；
             # 若不一致，则将本地的周期信息打包回服务器（以本地为准）
             try:
                 for st in server_tasks:
-                    uid = st.get('uid')
-                    # 解析服务器 description 中可能存在的 Recurrence Info
-                    desc = st.get('description', '') or ''
-                    try:
-                        _, server_meta = unpack_meta_from_note(desc)
-                    except Exception:
-                        server_meta = {}
-                    # 从本地任务列表查找对应本地记录（以 uid 为准）
-                    local_match = next((lt for lt in local_tasks if lt.get('uid') == uid), None)
-                    if not local_match:
-                        continue
-                    # 规范化本地周期字段
-                    local_interval = local_match.get('recurrence_interval_minutes')
-                    if local_interval is None and local_match.get('recurrence_interval_days'):
-                        local_interval = local_match.get('recurrence_interval_days') * 24 * 60
-                    local_is_rec = bool(local_match.get('is_recurring', False))
+                   pass
+            except Exception:
+                pass
 
-                    server_is_rec = bool(server_meta.get('is_recurring', False))
-                    server_interval = server_meta.get('recurrence_interval_minutes')
-
-                    # 若服务器解析到的周期信息与本地不一致，则以本地为准，推送更新到服务器
-                    if (local_is_rec != server_is_rec) or (local_interval != server_interval):
-                        try:
-                            # 以本地数据为准打包 note
-                            note = pack_meta_into_note(local_match)
-                            due_value = local_match.get('due')
-                            try:
-                                if isinstance(due_value, str):
-                                    due_value = datetime.datetime.strptime(due_value, "%Y-%m-%dT%H:%M:%S")
-                            except Exception:
-                                pass
-                            print(f"[DEBUG] Sync: fixing recurrence meta for uid={uid}, pushing note to server")
-                            self.nc_client.updateTodo(uid, note=note, due=due_value)
-                        except Exception as ex_upd:
-                            print(f"[DEBUG] Failed to push recurrence meta for uid={uid}: {ex_upd}")
-                        # 把本地周期信息保回 server_tasks，以便随后保存到本地文件
-                        st["is_recurring"] = local_is_rec
-                        st["recurrence_interval_minutes"] = local_interval
-            except Exception as ex_meta:
-                print(f"[DEBUG] Error while checking recurrence metadata: {ex_meta}")
-            
-            # 保留本地存储的周期任务设置
-            local_recurring_map = {}
-            for lt in local_tasks:
-                if lt.get("uid"):
-                    # 兼容旧版
-                    interval_minutes = lt.get("recurrence_interval_minutes")
-                    if interval_minutes is None and lt.get("recurrence_interval_days"):
-                        interval_minutes = lt.get("recurrence_interval_days") * 24 * 60
-                    local_recurring_map[lt["uid"]] = {
-                        "is_recurring": lt.get("is_recurring", False),
-                        "recurrence_interval_minutes": interval_minutes
-                    }
-            
-            for t in server_tasks:
-                if t.get("uid") in local_recurring_map:
-                    t["is_recurring"] = local_recurring_map[t["uid"]]["is_recurring"]
-                    t["recurrence_interval_minutes"] = local_recurring_map[t["uid"]]["recurrence_interval_minutes"]
-            
+            # 直接使用服务器数据保存
             save_local_tasks(server_tasks, self.path_tasks)
         except Exception as ex:
             print(f"{self.translations['sync_error']}: {ex}")
@@ -778,28 +704,27 @@ class MainWindow(QtWidgets.QMainWindow):
         aboutDlg.exec_()
 
     def checkRecurringTasksExpiry(self):
-        """检查周期任务是否已到期，如果到期则标记为完成并创建下一周期的新任务"""
+        """检查周期任务是否已到期，如果到期则自动将 due 更新为下一次的时间"""
         now = datetime.datetime.now()
         tasks_updated = False
         print(f"[DEBUG] checkRecurringTasksExpiry called, checking {len(self.tasks)} tasks")
         
         for task in self.tasks:
-            is_recurring = getattr(task, 'is_recurring', False)
-            # 兼容旧版：优先使用 recurrence_interval_minutes，否则从 recurrence_interval_days 转换
-            interval_minutes = getattr(task, 'recurrence_interval_minutes', None)
-            if interval_minutes is None:
-                interval_days = getattr(task, 'recurrence_interval_days', None)
-                if interval_days:
-                    interval_minutes = interval_days * 24 * 60
+            rrule_val = getattr(task, 'rrule', None) or (task.get('rrule') if isinstance(task, dict) else None)
+            
+            interval_minutes = 0
+            if rrule_val:
+                 interval_minutes = parse_rrule_to_minutes(rrule_val) or 0
+                 
             status = getattr(task, 'status', 'NEEDS-ACTION')
             
-            print(f"[DEBUG] Task '{task.summary}': is_recurring={is_recurring}, interval_minutes={interval_minutes}, due={task.due}, status={status}")
+            print(f"[DEBUG] Task '{task.summary}': rrule={rrule_val}, due={task.due}, status={status}")
             
             # 跳过已完成的任务
             if status == 'COMPLETED':
                 continue
             
-            if not is_recurring or not interval_minutes or not task.due:
+            if not rrule_val or not interval_minutes or not task.due:
                 continue
             
             # 确保 task_due 是 datetime 对象
@@ -820,26 +745,17 @@ class MainWindow(QtWidgets.QMainWindow):
                 while new_due <= now:
                     new_due = new_due + interval
                 
-                print(f"[DEBUG] Task expired! Marking as complete and creating new task with due={new_due}")
+                print(f"[DEBUG] Task expired! Updating due to next occurrence: {new_due}")
                 
-                # 1. 将当前任务标记为已完成
-                self.task_handler.update_status(task.uid, task.summary, 'COMPLETED', 100)
-                
-                # 2. 创建下一周期的新任务
-                # 使用清理后的 description（去除 meta）来创建下一周期任务
-                try:
-                    clean_desc, _ = unpack_meta_from_note(task.description if task.description else "")
-                except Exception:
-                    clean_desc = task.description
-                new_task_data = {
+                # 更新任务的 due 时间为下一次
+                task_data = {
                     "summary": task.summary,
-                    "description": clean_desc,
+                    "description": task.description if task.description else "",
                     "priority": task.priority,
                     "due": new_due,
-                    "is_recurring": True,
-                    "recurrence_interval_minutes": interval_minutes
+                    "rrule": rrule_val
                 }
-                self.task_handler.add_task(new_task_data)
+                self.task_handler.update_task(task.uid, task_data)
                 
                 tasks_updated = True
         

@@ -74,6 +74,13 @@ TRANSLATIONS = {
         "priority_low": "低",
         # 周期任务相关
         "recurring_task": "周期任务",
+        "recur_type": "周期类型:",
+        "recur_interval": "间隔:",
+        "freq_daily": "每日",
+        "freq_weekly": "每周",
+        "freq_monthly": "每月",
+        "freq_yearly": "每年",
+        "freq_custom": "自定义",
         "interval_days": "天:",
         "interval_hours": "小时:",
         "interval_minutes": "分钟:",
@@ -153,6 +160,13 @@ TRANSLATIONS = {
         "priority_low": "Low",
         # Recurring task related
         "recurring_task": "Recurring Task",
+        "recur_type": "Recurrence Type:",
+        "recur_interval": "Interval:",
+        "freq_daily": "Daily",
+        "freq_weekly": "Weekly",
+        "freq_monthly": "Monthly",
+        "freq_yearly": "Yearly",
+        "freq_custom": "Custom",
         "interval_days": "Days:",
         "interval_hours": "Hours:",
         "interval_minutes": "Minutes:"
