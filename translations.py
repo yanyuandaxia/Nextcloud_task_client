@@ -72,6 +72,11 @@ TRANSLATIONS = {
         "priority_high": "高",
         "priority_medium": "中",
         "priority_low": "低",
+        # 周期任务相关
+        "recurring_task": "周期任务",
+        "interval_days": "天:",
+        "interval_hours": "小时:",
+        "interval_minutes": "分钟:",
     },
     "en": {
         "window_title": "Nextcloud Task Sync Client",
@@ -145,6 +150,11 @@ TRANSLATIONS = {
         "priority_extremely_high": "Extremely High",
         "priority_high": "High",
         "priority_medium": "Medium",
-        "priority_low": "Low"
+        "priority_low": "Low",
+        # Recurring task related
+        "recurring_task": "Recurring Task",
+        "interval_days": "Days:",
+        "interval_hours": "Hours:",
+        "interval_minutes": "Minutes:"
     }
 }
